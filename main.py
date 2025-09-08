@@ -45,12 +45,12 @@ app.add_middleware(
 )
 
 # ルーターの登録 - 順序が重要！
-app.include_router(admin_router)      # /admin, /bulk など
-app.include_router(analytics_router)  # /analytics/{short_code}
-app.include_router(bulk_router)       # /bulk と /api/bulk-generate
-app.include_router(shorten_router, prefix="/api")
-app.include_router(export_router, prefix="/api")
-app.include_router(redirect_router)   # 最後に動的なルート {short_code}
+app.include_router(redirect.router)
+app.include_router(shorten.router)
+app.include_router(analytics.router)
+app.include_router(bulk.router)
+app.include_router(export.router)
+app.include_router(admin.router)
 
 # ルートページ
 @app.get("/")
@@ -77,4 +77,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
