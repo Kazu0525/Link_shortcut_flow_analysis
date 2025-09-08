@@ -22,7 +22,7 @@ def get_base_url() -> str:  # 戻り値の型ヒントを追加
     except Exception:
         return "http://localhost:8000"
 
-BASE_URL = os.getenv("BASE_URL", "https://your-app-name.railway.app")
+BASE_URL = os.getenv("BASE_URL", "https://link-shortcut-flow-analysis.onrender.com")
 DB_PATH = os.getenv("DB_PATH", "url_shortener.db")
 
 # ライブラリ可用性チェック
@@ -43,4 +43,5 @@ try:
     import pandas as pd
     PANDAS_AVAILABLE: bool = True
 except ImportError:
+
     PANDAS_AVAILABLE: bool = False
