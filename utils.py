@@ -1,79 +1,56 @@
-import string
-import random
-import base64
-from io import BytesIO
-from datetime import datetime
-from typing import Dict, Any, Optional  # Optionalを追加
-from config import QR_AVAILABLE, UA_AVAILABLE
+import os
+import sqlite3
+from config import DB_PATH
 
-def generate_short_code(length: int = 6, conn=None) -> str:
-
-    """短縮コードを生成"""
-    characters = string.ascii_letters + string.digits
-    while True:
-        code = ''.join(random.choice(characters) for _ in range(length))
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM urls WHERE short_code = ?", (code,))
-            if not cursor.fetchone():
-                return code
-        else:
-            return code
-
-def generate_qr_code_base64(url: str, size: int = 200) -> Optional[str]:
-    """QRコードをBase64で生成"""
-    if not QR_AVAILABLE:
-        return None
+def init_database():
+    """データベースの初期化とバックアップ復元"""
+    # データベースディレクトリの確認
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir)
     
-    try:
-        import qrcode
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(url)
-        qr.make(fit=True)
-        
-        qr_image = qr.make_image(fill_color="black", back_color="white")
-        qr_image = qr_image.resize((size, size))
-        
-        img_buffer = BytesIO()
-        qr_image.save(img_buffer, format='PNG')
-        img_buffer.seek(0)
-        
-        return base64.b64encode(img_buffer.getvalue()).decode('utf-8')
-    except Exception:
-        return None
-
-def parse_user_agent(user_agent: str) -> Dict[str, str]:
-    """User Agentを解析"""
-    if not UA_AVAILABLE:
-        return {'device_type': 'unknown', 'browser': 'unknown', 'os': 'unknown'}
+    # バックアップファイルがあれば復元
+    backup_path = DB_PATH + '.backup'
+    if os.path.exists(backup_path):
+        if os.path.exists(DB_PATH):
+            os.remove(DB_PATH)
+        os.rename(backup_path, DB_PATH)
     
-    try:
-        from user_agents import parse
-        ua = parse(user_agent)
-        return {
-            'device_type': 'mobile' if ua.is_mobile else 'tablet' if ua.is_tablet else 'desktop',
-            'browser': f"{ua.browser.family} {ua.browser.version_string}",
-            'os': f"{ua.os.family} {ua.os.version_string}"
-        }
-    except Exception:
-        return {'device_type': 'unknown', 'browser': 'unknown', 'os': 'unknown'}
-
-def get_location_info(ip_address: str) -> Dict[str, str]:
-    """IPアドレスから位置情報を取得"""
-    # 簡易的な実装（実際にはIP情報サービスを使用）
-    return {
-        'country': 'Unknown',
-        'region': 'Unknown', 
-        'city': 'Unknown',
-        'timezone': 'Unknown'
-    }
-
-def parse_utm_parameters(referrer: str) -> Dict[str, str]:
-    """UTMパラメータを解析"""
-    # 簡易的な実装
-    return {}
+    # データベース接続とテーブル作成
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # URLsテーブル
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS urls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        short_code TEXT UNIQUE NOT NULL,
+        original_url TEXT NOT NULL,
+        custom_name TEXT,
+        campaign_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE
+    )
+    ''')
+    
+    # クリック履歴テーブル
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS clicks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url_id INTEGER NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        referrer TEXT,
+        source TEXT DEFAULT 'direct',
+        clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (url_id) REFERENCES urls (id)
+    )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    
+    # バックアップ作成
+    if os.path.exists(DB_PATH):
+        with open(DB_PATH, 'rb') as src, open(backup_path, 'wb') as dst:
+            dst.write(src.read())
