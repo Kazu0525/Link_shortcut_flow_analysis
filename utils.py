@@ -1,11 +1,92 @@
 import os
 import sqlite3
 import logging
+import re
+from typing import Dict, Any
 from config import DB_PATH
 
 # ロギング設定
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def get_location_info(ip_address: str) -> Dict[str, str]:
+    """
+    IPアドレスから位置情報を取得（簡易版）
+    実際の実装ではIP Geolocation APIを使用する
+    """
+    # 簡易的な実装 - 本番環境では専用のAPIを使用
+    if ip_address == "127.0.0.1":
+        return {"country": "Local", "city": "Localhost"}
+    
+    # ここで実際のIP位置情報APIを呼び出す
+    # 例: ipinfo.io, ipapi.co など
+    return {"country": "Unknown", "city": "Unknown"}
+
+def parse_user_agent(user_agent: str) -> Dict[str, str]:
+    """
+    ユーザーエージェント文字列を解析
+    """
+    if not user_agent:
+        return {"browser": "Unknown", "device": "Unknown", "os": "Unknown"}
+    
+    result = {"browser": "Unknown", "device": "Unknown", "os": "Unknown"}
+    
+    # ブラウザ判定
+    if "Chrome" in user_agent:
+        result["browser"] = "Chrome"
+    elif "Firefox" in user_agent:
+        result["browser"] = "Firefox"
+    elif "Safari" in user_agent:
+        result["browser"] = "Safari"
+    elif "Edge" in user_agent:
+        result["browser"] = "Edge"
+    
+    # OS判定
+    if "Windows" in user_agent:
+        result["os"] = "Windows"
+    elif "Mac" in user_agent:
+        result["os"] = "Mac"
+    elif "Linux" in user_agent:
+        result["os"] = "Linux"
+    elif "iPhone" in user_agent or "iPad" in user_agent:
+        result["os"] = "iOS"
+    elif "Android" in user_agent:
+        result["os"] = "Android"
+    
+    # デバイス判定
+    if "Mobile" in user_agent:
+        result["device"] = "Mobile"
+    elif "Tablet" in user_agent:
+        result["device"] = "Tablet"
+    else:
+        result["device"] = "Desktop"
+    
+    return result
+
+def parse_utm_parameters(referrer: str) -> Dict[str, str]:
+    """
+    UTMパラメータを解析
+    """
+    if not referrer:
+        return {}
+    
+    utm_params = {}
+    
+    # 簡易的なUTMパラメータ解析
+    utm_patterns = {
+        'utm_source': r'[?&]utm_source=([^&]*)',
+        'utm_medium': r'[?&]utm_medium=([^&]*)',
+        'utm_campaign': r'[?&]utm_campaign=([^&]*)',
+        'utm_term': r'[?&]utm_term=([^&]*)',
+        'utm_content': r'[?&]utm_content=([^&]*)'
+    }
+    
+    for key, pattern in utm_patterns.items():
+        match = re.search(pattern, referrer)
+        if match:
+            utm_params[key] = match.group(1)
+    
+    return utm_params
 
 def init_database():
     """データベースの初期化とバックアップ復元"""
@@ -69,3 +150,5 @@ def init_database():
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise
+
+# その他のユーティリティ関数があればここに追加
