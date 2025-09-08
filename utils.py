@@ -2,12 +2,53 @@ import os
 import sqlite3
 import logging
 import re
+import random
+import string
+import qrcode
+import io
+import base64
 from typing import Dict, Any
 from config import DB_PATH
 
 # ロギング設定
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def generate_short_code(length: int = 6) -> str:
+    """
+    ランダムな短縮コードを生成
+    """
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
+def generate_qr_code_base64(url: str) -> str:
+    """
+    URLからQRコードを生成し、Base64エンコードした文字列を返す
+    """
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # 画像をバイトデータに変換
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        
+        # Base64エンコード
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{img_str}"
+        
+    except Exception as e:
+        logger.error(f"QR code generation failed: {e}")
+        return ""
 
 def get_location_info(ip_address: str) -> Dict[str, str]:
     """
@@ -150,5 +191,3 @@ def init_database():
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise
-
-# その他のユーティリティ関数があればここに追加
