@@ -4,7 +4,13 @@ from fastapi.responses import HTMLResponse
 from datetime import datetime
 from contextlib import asynccontextmanager
 import config
-from routes import redirect_router, shorten_router, analytics_router, bulk_router, export_router, admin_router
+# 修正: ルーターのインポート方法を変更
+from routes.redirect import router as redirect_router
+from routes.shorten import router as shorten_router
+from routes.analytics import router as analytics_router
+from routes.bulk import router as bulk_router
+from routes.export import router as export_router
+from routes.admin import router as admin_router
 from database import init_db
 
 # ライフスパンハンドラーを使用
@@ -45,12 +51,12 @@ app.add_middleware(
 )
 
 # ルーターの登録 - 順序が重要！
-app.include_router(redirect.router)
-app.include_router(shorten.router)
-app.include_router(analytics.router)
-app.include_router(bulk.router)
-app.include_router(export.router)
-app.include_router(admin.router)
+app.include_router(redirect_router)
+app.include_router(shorten_router)
+app.include_router(analytics_router)
+app.include_router(bulk_router)
+app.include_router(export_router)
+app.include_router(admin_router)
 
 # ルートページ
 @app.get("/")
@@ -77,5 +83,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
