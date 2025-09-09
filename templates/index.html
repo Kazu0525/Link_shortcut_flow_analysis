@@ -362,7 +362,10 @@
                     ${data.campaign_name ? `<div><strong>キャンペーン:</strong> ${data.campaign_name}</div>` : ''}
                     <div class="qr-code">
                         <p><strong>QRコード:</strong></p>
-                        <img src="${data.qr_code_url}" alt="QRコード">
+                        <div style="padding: 20px; background: #f0f0f0; border-radius: 10px; text-align: center;">
+                            📱 QRコード機能<br>
+                            <small>（軽量版のため無効化中）</small>
+                        </div>
                     </div>
                     <div style="margin-top: 20px;">
                         <a href="/analytics/${data.short_code}" class="btn">📈 分析ページ</a>
