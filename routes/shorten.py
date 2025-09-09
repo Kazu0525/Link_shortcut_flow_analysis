@@ -1,3 +1,4 @@
+# routes/shorten.py
 from fastapi import APIRouter, HTTPException
 from models import ShortenRequest, ShortenResponse, ErrorResponse
 import sqlite3
@@ -102,3 +103,4 @@ async def get_all_urls():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"エラー: {str(e)}")
+
