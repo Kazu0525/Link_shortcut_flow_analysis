@@ -10,7 +10,7 @@ import base64
 from datetime import datetime
 
 # 相対インポートを使用
-from ..models import ShortenRequest, ShortenResponse
+from models import ShortenRequest, ShortenResponse
 from .. import config
 from ..database import get_db_connection
 
@@ -109,5 +109,6 @@ async def get_all_urls():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"エラー: {str(e)}")
+
 
 
