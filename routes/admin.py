@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Request  # Requestを追加
+from fastapi.responses import HTMLResponse, JSONResponse
 import sqlite3
-from config import DB_PATH, BASE_URL
-from utils import generate_qr_code_base64
+from datetime import datetime, timedelta
+from typing import List, Optional
+import csv
+from io import StringIO
+from config import DB_PATH
 
 router = APIRouter()
-
 # 管理画面HTMLテンプレート
 ADMIN_HTML = """
 <!DOCTYPE html>
@@ -159,5 +161,6 @@ async def admin_dashboard(request: Request):
     except Exception as e:
         error_html = f"<h1>Error</h1><p>{str(e)}</p>"
         return HTMLResponse(content=error_html, status_code=500)
+
 
 
