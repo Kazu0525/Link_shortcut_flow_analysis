@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一括URL生成 - LinkTrack Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 25px;
+            transition: background 0.3s;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .method-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .method-card {
+            border: 2px solid #e1e5e9;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .method-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .method-card.active {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .method-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+        
+        .method-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .method-description {
+            color: #666;
+            line-height: 1.5;
+        }
+        
+        .bulk-section {
+            display: none;
+        }
+        
+        .bulk-section.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group textarea {
+            height: 200px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .file-upload {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .file-upload:hover {
+            background: #f8f9ff;
+        }
+        
+        .file-upload.dragover {
+            border-color: #4c63d2;
+            background: #f0f3ff;
+        }
+        
+        .file-upload input[type="file"] {
+            display: none;
+        }
+        
+        .file-upload-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            margin-left: 10px;
+        }
+        
+        .btn-outline {
+            background: none;
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+        
+        .progress-section {
+            display: none;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .results-section {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .results-summary {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .results-table th,
+        .results-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .results-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .status-success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .status-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .template-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .template-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .copy-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .method-selector {
+                grid-template-columns: 1fr;
+            }
+            
+            .navigation {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .template-links {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 一括URL生成</h1>
+            <p>複数のURLを一度に短縮して効率的にキャンペーンを管理</p>
+        </div>
+        
+        <div class="navigation">
+            <a href="/" class="nav-link">🏠 ホーム</a>
+            <a href="/admin" class="nav-link">📊 管理ダッシュボード</a>
+            <a href="/bulk" class="nav-link">📦 一括生成</a>
+            <a href="/docs" class="nav-link">📚 API文書</a>
+        </div>
+        
+        <div class="main-content">
+            <h2>🚀 一括生成方法を選択</h2>
+            
+            <!-- 方法選択 -->
+            <div class="method-selector">
+                <div class="method-card" onclick="selectMethod('manual')">
+                    <div class="method-icon">📝</div>
+                    <div class="method-title">手動入力</div>
+                    <div class="method-description">
+                        URLを直接テキストエリアに入力して一括生成
+                    </div>
+                </div>
+                
+                <div class="method-card" onclick="selectMethod('upload')">
+                    <div class="method-icon">📄</div>
+                    <div class="method-title">ファイルアップロード</div>
+                    <div class="method-description">
+                        CSV、JSON、TXTファイルをアップロードして一括生成
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 手動入力セクション -->
+            <div id="manualSection" class="bulk-section">
+                <h3>📝 手動でURLを入力</h3>
+                
+                <form id="manualForm">
+                    <div class="form-group">
+                        <label for="campaignName">キャンペーン名（任意）</label>
+                        <input type="text" id="campaignName" name="campaign_name" 
+                               placeholder="例: 春のキャンペーン2025">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="urlList">URL一覧 *</label>
+                        <textarea id="urlList" name="url_list" required
+                                  placeholder="1行に1つのURLを入力してください&#10;例:&#10;https://example.com&#10;https://google.com&#10;https://github.com"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn">🚀 一括生成開始</button>
+                    <button type="button" class="btn btn-secondary" onclick="clearManualForm()">🗑️ クリア</button>
+                </form>
+            </div>
+            
+            <!-- ファイルアップロードセクション -->
+            <div id="uploadSection" class="bulk-section">
+                <h3>📄 ファイルをアップロード</h3>
+                
+                <!-- テンプレートダウンロード -->
+                <div class="template-section">
+                    <h4>📋 テンプレートファイル</h4>
+                    <p>以下のテンプレートをダウンロードして、URLリストを作成してください：</p>
+                    <div class="template-links">
+                        <button class="btn btn-outline" onclick="downloadTemplate('csv')">📄 CSVテンプレート</button>
+                        <button class="btn btn-outline" onclick="downloadTemplate('json')">📋 JSONテンプレート</button>
+                    </div>
+                </div>
+                
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="uploadCampaignName">キャンペーン名（任意）</label>
+                        <input type="text" id="uploadCampaignName" name="campaign_name" 
+                               placeholder="例: 春のキャンペーン2025">
+                    </div>
+                    
+                    <div class="file-upload" id="fileUpload">
+                        <div class="file-upload-icon">📁</div>
+                        <h4>ファイルをドラッグ&ドロップ</h4>
+                        <p>または</p>
+                        <button type="button" class="btn btn-outline" onclick="document.getElementById('fileInput').click()">
+                            📂 ファイルを選択
+                        </button>
+                        <input type="file" id="fileInput" accept=".csv,.json,.txt" onchange="handleFileSelect(event)">
+                        <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                            対応形式: CSV, JSON, TXT (最大500件)
+                        </p>
+                    </div>
+                    
+                    <div id="selectedFile" style="display: none; margin-top: 15px;">
+                        <p><strong>選択されたファイル:</strong> <span id="fileName"></span></p>
+                    </div>
+                    
+                    <button type="submit" class="btn" style="margin-top: 20px;">🚀 アップロードして生成</button>
+                </form>
+            </div>
+            
+            <!-- 進行状況 -->
+            <div id="progressSection" class="progress-section">
+                <h4>🔄 処理中...</h4>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p id="progressText">準備中...</p>
+            </div>
+            
+            <!-- 結果表示 -->
+            <div id="resultsSection" class="results-section">
+                <div id="resultsSummary" class="results-summary"></div>
+                
+                <div style="overflow-x: auto;">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>元のURL</th>
+                                <th>短縮URL</th>
+                                <th>カスタム名</th>
+                                <th>ステータス</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button class="btn" onclick="exportResults()">💾 結果をエクスポート</button>
+                    <button class="btn btn-secondary" onclick="resetForm()">🔄 新しい一括生成</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentResults = null;
+        
+        // 方法選択
+        function selectMethod(method) {
+            // すべてのカードから active クラスを削除
+            document.querySelectorAll('.method-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            
+            // すべてのセクションを非表示
+            document.querySelectorAll('.bulk-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // 選択されたカードにactiveクラスを追加
+            event.target.closest('.method-card').classList.add('active');
+            
+            // 選択されたセクションを表示
+            if (method === 'manual') {
+                document.getElementById('manualSection').classList.add('active');
+            } else if (method === 'upload') {
+                document.getElementById('uploadSection').classList.add('active');
+            }
+        }
+        
+        // 手動フォーム送信
+        document.getElementById('manualForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const campaignName = document.getElementById('campaignName').value.trim();
+            const urlList = document.getElementById('urlList').value.trim();
+            
+            if (!urlList) {
+                alert('URLを入力してください');
+                return;
+            }
+            
+            const urls = urlList.split('\n')
+                .map(url => url.trim())
+                .filter(url => url)
+                .map(url => ({ url: url, custom_name: null }));
+            
+            if (urls.length === 0) {
+                alert('有効なURLが見つかりません');
+                return;
+            }
+            
+            if (urls.length > 100) {
+                alert('一度に処理できるURLは100件までです');
+                return;
+            }
+            
+            await processBulkUrls({
+                urls: urls,
+                campaign_name: campaignName || null
+            });
+        });
+        
+        // ファイルアップロードフォーム送信
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileInput');
+            const campaignName = document.getElementById('uploadCampaignName').value.trim();
+            
+            if (!fileInput.files[0]) {
+                alert('ファイルを選択してください');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            if (campaignName) {
+                formData.append('campaign_name', campaignName);
+            }
+            
+            await uploadAndProcess(formData);
+        });
+        
+        // 一括処理実行
+        async function processBulkUrls(data) {
+            showProgress();
+            updateProgress(10, '処理開始...');
+            
+            try {
+                const response = await fetch('/api/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                updateProgress(50, 'サーバーで処理中...');
+                
+                const result = await response.json();
+                
+                updateProgress(100, '処理完了！');
+                
+                setTimeout(() => {
+                    hideProgress();
+                    showResults(result);
+                }, 1000);
+                
+            } catch (error) {
+                hideProgress();
+                alert('処理中にエラーが発生しました: ' + error.message);
+            }
+        }
+        
+        // ファイルアップロード処理
+        async function uploadAndProcess(formData) {
+            showProgress();
+            updateProgress(10, 'ファイルアップロード中...');
+            
+            try {
+                const response = await fetch('/api/bulk/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                updateProgress(50, 'ファイル解析中...');
+                
+                const result = await response.json();
+                
+                updateProgress(100, '処理完了！');
+                
+                setTimeout(() => {
+                    hideProgress();
+                    showResults(result);
+                }, 1000);
+                
+            } catch (error) {
+                hideProgress();
+                alert('アップロード中にエラーが発生しました: ' + error.message);
+            }
+        }
+        
+        // 進行状況表示
+        function showProgress() {
+            document.getElementById('progressSection').style.display = 'block';
+        }
+        
+        function hideProgress() {
+            document.getElementById('progressSection').style.display = 'none';
+        }
+        
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = text;
+        }
+        
+        // 結果表示
+        function showResults(result) {
+            currentResults = result;
+            
+            const summary = document.getElementById('resultsSummary');
+            summary.innerHTML = `
+                <h4>✅ 一括生成完了</h4>
+                <p><strong>総件数:</strong> ${result.total_count}件</p>
+                <p><strong>成功:</strong> ${result.success_count}件</p>
+                <p><strong>失敗:</strong> ${result.failed_count}件</p>
+                ${result.campaign_name ? `<p><strong>キャンペーン:</strong> ${result.campaign_name}</p>` : ''}
+            `;
+            
+            const tbody = document.getElementById('resultsTableBody');
+            tbody.innerHTML = '';
+            
+            result.results.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td title="${item.original_url}">${item.original_url.length > 50 ? item.original_url.substring(0, 50) + '...' : item.original_url}</td>
+                    <td>
+                        ${item.success ? `<a href="${item.short_url}" target="_blank">${item.short_url}</a>` : '-'}
+                        ${item.success ? `<button class="copy-button" onclick="copyToClipboard('${item.short_url}')">📋</button>` : ''}
+                    </td>
+                    <td>${item.custom_name || '-'}</td>
+                    <td>
+                        ${item.success ? '<span class="status-success">✅ 成功</span>' : `<span class="status-error">❌ ${item.error_message}</span>`}
+                    </td>
+                    <td>
+                        ${item.success ? `<a href="/analytics/${item.short_code}" class="btn" style="padding: 4px 8px; font-size: 12px;">📈 分析</a>` : '-'}
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // ファイル選択処理
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('selectedFile').style.display = 'block';
+                document.getElementById('fileName').textContent = file.name;
+            }
+        }
+        
+        // ドラッグ&ドロップ処理
+        const fileUpload = document.getElementById('fileUpload');
+        
+        fileUpload.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+        
+        fileUpload.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+        });
+        
+        fileUpload.addEventListener('drop', function(e) {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('fileInput').files = files;
+                handleFileSelect({ target: { files: files } });
+            }
+        });
+        
+        // テンプレートダウンロード
+        async function downloadTemplate(format) {
+            try {
+                const response = await fetch(`/api/bulk/template?format=${format}`);
+                const data = await response.json();
+                
+                const blob = new Blob([data.content], { type: data.content_type });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                alert('テンプレートのダウンロードに失敗しました');
+            }
+        }
+        
+        // ユーティリティ関数
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('📋 クリップボードにコピーしました！');
+            });
+        }
+        
+        function clearManualForm() {
+            document.getElementById('manualForm').reset();
+        }
+        
+        function resetForm() {
+            location.reload();
+        }
+        
+        function exportResults() {
+            if (!currentResults) {
+                alert('エクスポートする結果がありません');
+                return;
+            }
+            
+            const csv = convertToCSV(currentResults.results);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bulk_results_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function convertToCSV(data) {
+            const headers = ['original_url', 'short_url', 'custom_name', 'success', 'error_message'];
+            const csvContent = [
+                headers.join(','),
+                ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+            ].join('\n');
+            
+            return csvContent;
+        }
+    </script>
+</body>
+</html>
