@@ -1,3 +1,4 @@
+# models.py
 from pydantic import BaseModel, HttpUrl, validator
 from typing import Optional, List
 from datetime import datetime
@@ -90,3 +91,4 @@ class SystemStats(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
+
