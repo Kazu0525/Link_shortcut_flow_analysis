@@ -52,14 +52,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ルーターの登録 - 個別のルーターを使用
-# ルーターの登録 - 正しいプレフィックスを設定
-app.include_router(redirect_router, prefix="")
-app.include_router(shorten_router, prefix="")
-app.include_router(analytics_router, prefix="/analytics")
-app.include_router(bulk_router, prefix="/bulk")
-app.include_router(export_router, prefix="/export")
-app.include_router(admin_router, prefix="/admin")
+# ルーターの登録 - **重要: 順序と prefix を正しく設定**
+# 1. 特定のパスを持つルーターを先に登録（より具体的なものから）
+app.include_router(admin_router, prefix="")        # /admin
+app.include_router(bulk_router, prefix="")         # /bulk  
+app.include_router(export_router, prefix="")       # /export/*
+app.include_router(shorten_router, prefix="")      # /api/shorten
+app.include_router(analytics_router, prefix="")    # /analytics/{short_code}
+
+# 2. 最後にワイルドカードのリダイレクトルーターを登録
+app.include_router(redirect_router, prefix="")     # /{short_code} - 最後に登録
 
 # ルートページ
 @app.get("/")
@@ -68,10 +70,20 @@ async def root():
         "message": "Enhanced Link Tracker API v2.0",
         "endpoints": {
             "admin_dashboard": f"{config.BASE_URL}/admin",
-            "bulk_generation": f"{config.BASE_URL}/bulk",
+            "bulk_generation": f"{config.BASE_URL}/bulk", 
             "api_docs": f"{config.BASE_URL}/docs",
             "health_check": f"{config.BASE_URL}/health"
-        }
+        },
+        "registered_routes": [
+            "GET /",
+            "GET /health", 
+            "GET /admin",
+            "GET /bulk",
+            "POST /bulk-generate",
+            "GET /analytics/{short_code}",
+            "POST /api/shorten",
+            "GET /{short_code}",  # リダイレクト用
+        ]
     }
 
 # ヘルスチェック
@@ -87,4 +99,3 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
