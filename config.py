@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-# 基本設定
+# 基本設定（python-dotenv除去、os.getenv直接使用）
 BASE_URL = os.getenv("BASE_URL", "https://link-shortcut-flow-analysis.onrender.com")
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
@@ -22,7 +22,7 @@ MAX_CUSTOM_NAME_LENGTH = int(os.getenv("MAX_CUSTOM_NAME_LENGTH", "50"))
 RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "100"))
 MAX_URLS_PER_USER = int(os.getenv("MAX_URLS_PER_USER", "1000"))
 
-# QRコード設定
+# QRコード設定（軽量版）
 QR_CODE_SIZE = int(os.getenv("QR_CODE_SIZE", "10"))
 QR_CODE_BORDER = int(os.getenv("QR_CODE_BORDER", "4"))
 
@@ -45,7 +45,7 @@ LOG_FILE = os.getenv("LOG_FILE", "app.log")
 # 危険なURL検出設定
 MALICIOUS_DOMAINS = [
     "malware.com",
-    "phishing.com",
+    "phishing.com", 
     "spam.com"
 ]
 
