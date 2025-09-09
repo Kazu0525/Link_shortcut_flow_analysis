@@ -75,3 +75,31 @@ class BulkResponse(BaseModel):
     success_count: int
     failed_count: int
     campaign_name: Optional[str] = None
+
+# models.py に以下のクラスを追加
+class AnalyticsData(BaseModel):
+    short_code: str
+    total_clicks: int
+    unique_visitors: int
+    qr_clicks: int
+    last_clicked: Optional[datetime] = None
+    created_at: datetime
+
+class ClickDetail(BaseModel):
+    id: int
+    ip_address: str
+    user_agent: str
+    referrer: str
+    source: str
+    clicked_at: datetime
+
+class SystemStats(BaseModel):
+    total_links: int
+    total_clicks: int
+    total_qr_clicks: int
+    system_status: str
+
+class ErrorResponse(BaseModel):
+    error: str
+    detail: Optional[str] = None
+
