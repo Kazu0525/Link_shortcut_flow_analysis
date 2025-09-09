@@ -3,5 +3,8 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 aiofiles==23.2.1
 python-dotenv==1.0.1
-qrcode[pil]==7.4.2
 pydantic==2.5.0
+# QRコード生成（純Python版）
+pyqrcode==1.2.1
+pypng==0.20220715.0
+pillow==10.1.0
