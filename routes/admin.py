@@ -86,7 +86,7 @@ ADMIN_HTML = """
 """
 
 @router.get("/admin")
-async def admin_dashboard():
+async def admin_dashboard(request: Request):
     """統計管理画面"""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -159,4 +159,5 @@ async def admin_dashboard():
     except Exception as e:
         error_html = f"<h1>Error</h1><p>{str(e)}</p>"
         return HTMLResponse(content=error_html, status_code=500)
+
 
