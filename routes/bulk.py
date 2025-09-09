@@ -1,3 +1,4 @@
+# routes/bulk.py
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 import sqlite3
@@ -457,3 +458,4 @@ async def generate_unique_short_code_bulk(cursor, length=6):
             return code
     
     raise HTTPException(status_code=500, detail="短縮コードの生成に失敗しました")
+
