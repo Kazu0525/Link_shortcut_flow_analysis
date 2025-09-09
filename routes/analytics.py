@@ -110,7 +110,7 @@ ANALYTICS_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-@router.get("/analytics/{short_code}")
+@router.get("/{short_code}")  # ← 変更なし（パラメータあり）
 async def analytics_page(short_code: str):
     """分析画面"""
     try:
@@ -166,3 +166,4 @@ async def get_detailed_analytics(short_code: str) -> Dict[str, Any]:
     """詳細な分析データを取得（API用）"""
 
     # ... 既存のコード ...
+
