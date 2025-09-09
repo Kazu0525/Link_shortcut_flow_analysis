@@ -1,3 +1,4 @@
+# routes/analytics.py
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 import sqlite3
@@ -254,3 +255,4 @@ async def get_analytics_data(short_code: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"分析データ取得エラー: {e}")
         raise HTTPException(status_code=500, detail="分析データの取得に失敗しました")
+
