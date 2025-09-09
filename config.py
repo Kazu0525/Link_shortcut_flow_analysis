@@ -1,47 +1,22 @@
 import os
-from typing import Optional  # Optionalを追加
-
 from dotenv import load_dotenv
 
+# 環境変数を読み込み
 load_dotenv()
 
 # 基本設定
-def get_base_url() -> str:  # 戻り値の型ヒントを追加
-    base_url = os.getenv('BASE_URL')
-    if base_url:
-        return base_url.rstrip('/')
-    
-    try:
-        import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(1)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return f"http://{local_ip}:8000"
-    except Exception:
-        return "http://localhost:8000"
-
 BASE_URL = os.getenv("BASE_URL", "https://link-shortcut-flow-analysis.onrender.com")
 DB_PATH = os.getenv("DB_PATH", "url_shortener.db")
 
-# ライブラリ可用性チェック
-try:
-    import qrcode
-    from PIL import Image
-    QR_AVAILABLE: bool = True
-except ImportError:
-    QR_AVAILABLE: bool = False
+# データベース設定
+DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-try:
-    import user_agents
-    UA_AVAILABLE: bool = True
-except ImportError:
-    UA_AVAILABLE: bool = False
+# QRコード設定
+QR_CODE_SIZE = 10
+QR_CODE_BORDER = 4
 
-try:
-    import pandas as pd
-    PANDAS_AVAILABLE: bool = True
-except ImportError:
+# セキュリティ設定
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 
-    PANDAS_AVAILABLE: bool = False
+# デバッグモード
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
