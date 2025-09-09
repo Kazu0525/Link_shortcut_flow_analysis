@@ -8,7 +8,16 @@ import config
 from database import init_db
 
 # まず models をインポート（他のインポートの前に）
-from models import ShortenRequest, ShortenResponse, BulkRequest, BulkResponse, AnalyticsData, ClickDetail, SystemStats, ErrorResponse
+from models import (
+    ShortenRequest, 
+    ShortenResponse, 
+    BulkRequest, 
+    # BulkResponse,  # 一旦コメントアウト
+    AnalyticsData, 
+    ClickDetail, 
+    SystemStats, 
+    ErrorResponse
+)
 
 # 個別にルーターをインポート
 from routes.redirect import router as redirect_router
@@ -98,5 +107,6 @@ async def health_check():
 if name == "main":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
