@@ -52,37 +52,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ルーターの登録 - **重要: 順序と prefix を正しく設定**
-# 1. 特定のパスを持つルーターを先に登録（より具体的なものから）
-app.include_router(admin_router, prefix="")        # /admin
-app.include_router(bulk_router, prefix="")         # /bulk  
-app.include_router(export_router, prefix="")       # /export/*
-app.include_router(shorten_router, prefix="")      # /api/shorten
-app.include_router(analytics_router, prefix="")    # /analytics/{short_code}
+# **修正版ルーター登録 - 適切なprefixを使用**
+# 1. 管理系エンドポイント（具体的なパス）
+app.include_router(admin_router)           # 各ルーターファイル内で完全パス指定
+app.include_router(bulk_router)            # /bulk, /bulk-generate
+app.include_router(export_router)          # /export/*
+app.include_router(shorten_router)         # /api/shorten
+app.include_router(analytics_router)       # /analytics/{short_code}
 
-# 2. 最後にワイルドカードのリダイレクトルーターを登録
-app.include_router(redirect_router, prefix="")     # /{short_code} - 最後に登録
+# 2. 最後にワイルドカードルーター
+app.include_router(redirect_router)        # /{short_code} リダイレクト
 
 # ルートページ
 @app.get("/")
 async def root():
     return {
         "message": "Enhanced Link Tracker API v2.0",
+        "status": "running",
         "endpoints": {
             "admin_dashboard": f"{config.BASE_URL}/admin",
             "bulk_generation": f"{config.BASE_URL}/bulk", 
             "api_docs": f"{config.BASE_URL}/docs",
             "health_check": f"{config.BASE_URL}/health"
         },
-        "registered_routes": [
-            "GET /",
-            "GET /health", 
-            "GET /admin",
-            "GET /bulk",
-            "POST /bulk-generate",
-            "GET /analytics/{short_code}",
-            "POST /api/shorten",
-            "GET /{short_code}",  # リダイレクト用
+        "available_routes": [
+            "GET / - システム情報",
+            "GET /health - ヘルスチェック",
+            "GET /admin - 管理ダッシュボード",
+            "GET /bulk - 一括生成ページ",
+            "POST /bulk-generate - 一括生成API",
+            "GET /analytics/{short_code} - 分析画面",
+            "POST /api/shorten - URL短縮API",
+            "GET /{short_code} - リダイレクト処理"
         ]
     }
 
@@ -93,7 +94,8 @@ async def health_check():
         "status": "healthy", 
         "version": "2.0.0",
         "timestamp": datetime.now().isoformat(),
-        "base_url": config.BASE_URL
+        "base_url": config.BASE_URL,
+        "database": config.DB_PATH
     }
 
 if __name__ == "__main__":
