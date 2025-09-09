@@ -1,132 +1,302 @@
-import pyqrcode
-import io
-import base64
-from PIL import Image
+import sqlite3
 import string
 import random
-import sqlite3
-import config
 from datetime import datetime
+import hashlib
+import re
+from urllib.parse import urlparse
 
-def generate_short_code(length: int = 6) -> str:
-    """短縮コードを生成"""
-    characters = string.ascii_letters + string.digits
-    return ''.join(random.choice(characters) for _ in range(length))
-
-def create_qr_code(url: str) -> str:
-    """QRコードを生成してBase64エンコードされた文字列を返す（純Python版）"""
-    try:
-        # pyqrcodeを使用（純Python実装）
-        qr = pyqrcode.create(url)
-        
-        # PNG形式でバイトストリームに出力
-        buffer = io.BytesIO()
-        qr.png(buffer, scale=8)
-        
-        # Base64エンコード
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        
-        return f"data:image/png;base64,{img_str}"
-    except Exception as e:
-        print(f"QRコード生成エラー: {e}")
-        # フォールバック：シンプルなSVG QRコード
-        try:
-            qr_svg = pyqrcode.create(url)
-            svg_string = qr_svg.svg(scale=4)
-            svg_base64 = base64.b64encode(svg_string.encode()).decode()
-            return f"data:image/svg+xml;base64,{svg_base64}"
-        except:
-            return ""
+# 絶対インポートに変更
+import config
 
 def get_db_connection():
     """データベース接続を取得"""
-    return sqlite3.connect(config.DB_PATH)
+    try:
+        conn = sqlite3.connect(config.DB_PATH)
+        conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
+        return conn
+    except Exception as e:
+        print(f"データベース接続エラー: {e}")
+        raise
 
-def get_url_stats(short_code: str) -> dict:
-    """URL統計を取得"""
+def generate_short_code(length=6):
+    """ランダムな短縮コードを生成"""
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choices(chars, k=length))
+
+def validate_url(url: str) -> bool:
+    """URLの形式をバリデーション"""
+    try:
+        parsed = urlparse(url)
+        return all([
+            parsed.scheme in ['http', 'https'],
+            parsed.netloc,
+            len(url) <= 2048  # URL長制限
+        ])
+    except Exception:
+        return False
+
+def sanitize_custom_name(custom_name: str) -> str:
+    """カスタム名をサニタイズ"""
+    if not custom_name:
+        return None
+    
+    # 不正な文字を除去
+    sanitized = re.sub(r'[<>"\'/\\&]', '', custom_name)
+    
+    # 長さ制限
+    return sanitized[:50] if sanitized else None
+
+def get_url_info(short_code: str):
+    """短縮コードからURL情報を取得"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # URL情報取得
         cursor.execute("""
-            SELECT id, original_url, custom_name, campaign_name, created_at
+            SELECT id, short_code, original_url, custom_name, campaign_name, 
+                   created_at, is_active
             FROM urls 
-            WHERE short_code = ? AND is_active = 1
+            WHERE short_code = ?
         """, (short_code,))
         
-        url_info = cursor.fetchone()
-        if not url_info:
-            conn.close()
-            return None
+        result = cursor.fetchone()
+        conn.close()
         
-        url_id = url_info[0]
+        if result:
+            return dict(result)
+        return None
         
-        # クリック統計取得
+    except Exception as e:
+        print(f"URL情報取得エラー: {e}")
+        return None
+
+def get_click_stats(url_id: int):
+    """指定URLのクリック統計を取得"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # 基本統計
         cursor.execute("""
             SELECT 
                 COUNT(*) as total_clicks,
-                COUNT(DISTINCT ip_address) as unique_clicks,
-                COUNT(CASE WHEN source = 'qr' THEN 1 END) as qr_clicks
+                COUNT(DISTINCT ip_address) as unique_visitors,
+                COUNT(CASE WHEN source = 'qr_code' THEN 1 END) as qr_clicks,
+                MAX(clicked_at) as last_clicked
             FROM clicks 
             WHERE url_id = ?
         """, (url_id,))
         
-        stats = cursor.fetchone()
+        stats = dict(cursor.fetchone())
         
-        # 最近のクリック履歴
+        # ソース別統計
         cursor.execute("""
-            SELECT ip_address, user_agent, referrer, source, clicked_at
+            SELECT source, COUNT(*) as count
             FROM clicks 
             WHERE url_id = ?
-            ORDER BY clicked_at DESC
-            LIMIT 10
+            GROUP BY source
+            ORDER BY count DESC
         """, (url_id,))
         
-        click_history = cursor.fetchall()
+        sources = [dict(row) for row in cursor.fetchall()]
+        stats['sources'] = sources
         
         conn.close()
-        
-        return {
-            "url_id": url_id,
-            "original_url": url_info[1],
-            "custom_name": url_info[2],
-            "campaign_name": url_info[3],
-            "created_at": url_info[4],
-            "total_clicks": stats[0] or 0,
-            "unique_clicks": stats[1] or 0,
-            "qr_clicks": stats[2] or 0,
-            "click_history": [
-                {
-                    "ip_address": click[0],
-                    "user_agent": click[1],
-                    "referrer": click[2],
-                    "source": click[3],
-                    "clicked_at": click[4]
-                }
-                for click in click_history
-            ]
-        }
+        return stats
         
     except Exception as e:
-        print(f"統計取得エラー: {e}")
+        print(f"クリック統計取得エラー: {e}")
         return None
 
-def record_click(url_id: int, ip_address: str, user_agent: str = None, referrer: str = None, source: str = "direct"):
-    """クリックを記録"""
+def get_all_urls_stats():
+    """全URL統計を取得"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO clicks (url_id, ip_address, user_agent, referrer, source, clicked_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (url_id, ip_address, user_agent, referrer, source, datetime.now().isoformat()))
+            SELECT 
+                u.id,
+                u.short_code,
+                u.original_url,
+                u.custom_name,
+                u.campaign_name,
+                u.created_at,
+                COUNT(c.id) as total_clicks,
+                COUNT(DISTINCT c.ip_address) as unique_visitors,
+                COUNT(CASE WHEN c.source = 'qr_code' THEN 1 END) as qr_clicks,
+                MAX(c.clicked_at) as last_clicked
+            FROM urls u
+            LEFT JOIN clicks c ON u.id = c.url_id
+            WHERE u.is_active = 1
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        """, ())
         
-        conn.commit()
+        results = [dict(row) for row in cursor.fetchall()]
         conn.close()
-        return True
+        
+        return results
         
     except Exception as e:
-        print(f"クリック記録エラー: {e}")
+        print(f"全URL統計取得エラー: {e}")
+        return []
+
+def format_datetime(dt_string: str, format_type="display"):
+    """日時文字列をフォーマット"""
+    try:
+        if not dt_string:
+            return ""
+        
+        dt = datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
+        
+        if format_type == "display":
+            return dt.strftime("%Y/%m/%d %H:%M")
+        elif format_type == "date":
+            return dt.strftime("%Y/%m/%d")
+        elif format_type == "time":
+            return dt.strftime("%H:%M")
+        else:
+            return dt.isoformat()
+            
+    except Exception:
+        return dt_string
+
+def generate_hash(data: str) -> str:
+    """データのハッシュ値を生成"""
+    return hashlib.md5(data.encode()).hexdigest()
+
+def is_safe_url(url: str) -> bool:
+    """URLの安全性をチェック"""
+    try:
+        parsed = urlparse(url)
+        
+        # 危険なスキームをブロック
+        dangerous_schemes = ['javascript', 'data', 'file', 'ftp']
+        if parsed.scheme.lower() in dangerous_schemes:
+            return False
+        
+        # ローカルIPアドレスをブロック
+        host = parsed.netloc.lower()
+        local_patterns = [
+            'localhost',
+            '127.0.0.1',
+            '0.0.0.0',
+            '10.',
+            '192.168.',
+            '172.16.',
+            '172.17.',
+            '172.18.',
+            '172.19.',
+            '172.20.',
+            '172.21.',
+            '172.22.',
+            '172.23.',
+            '172.24.',
+            '172.25.',
+            '172.26.',
+            '172.27.',
+            '172.28.',
+            '172.29.',
+            '172.30.',
+            '172.31.'
+        ]
+        
+        for pattern in local_patterns:
+            if host.startswith(pattern):
+                return False
+        
+        return True
+        
+    except Exception:
         return False
+
+def clean_url(url: str) -> str:
+    """URLをクリーンアップ"""
+    # 先頭・末尾の空白を除去
+    url = url.strip()
+    
+    # プロトコルが無い場合はhttpsを追加
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    
+    return url
+
+def get_domain_from_url(url: str) -> str:
+    """URLからドメイン名を抽出"""
+    try:
+        parsed = urlparse(url)
+        return parsed.netloc
+    except Exception:
+        return ""
+
+def truncate_text(text: str, max_length: int = 50) -> str:
+    """テキストを指定長で切り詰め"""
+    if not text:
+        return ""
+    
+    if len(text) <= max_length:
+        return text
+    
+    return text[:max_length-3] + "..."
+
+def export_to_csv_format(data: list) -> str:
+    """データをCSV形式の文字列に変換"""
+    if not data:
+        return ""
+    
+    # ヘッダー
+    headers = list(data[0].keys())
+    csv_lines = [",".join(headers)]
+    
+    # データ行
+    for row in data:
+        values = [str(row.get(header, "")).replace(",", ";") for header in headers]
+        csv_lines.append(",".join(values))
+    
+    return "\n".join(csv_lines)
+
+def parse_user_agent(user_agent: str) -> dict:
+    """User-Agentを解析してデバイス情報を取得"""
+    if not user_agent:
+        return {"device": "unknown", "browser": "unknown", "os": "unknown"}
+    
+    ua_lower = user_agent.lower()
+    
+    # デバイス判定
+    device = "desktop"
+    if "mobile" in ua_lower or "android" in ua_lower or "iphone" in ua_lower:
+        device = "mobile"
+    elif "tablet" in ua_lower or "ipad" in ua_lower:
+        device = "tablet"
+    
+    # ブラウザ判定
+    browser = "unknown"
+    if "chrome" in ua_lower:
+        browser = "chrome"
+    elif "firefox" in ua_lower:
+        browser = "firefox"
+    elif "safari" in ua_lower and "chrome" not in ua_lower:
+        browser = "safari"
+    elif "edge" in ua_lower:
+        browser = "edge"
+    
+    # OS判定
+    os_name = "unknown"
+    if "windows" in ua_lower:
+        os_name = "windows"
+    elif "mac" in ua_lower:
+        os_name = "macos"
+    elif "linux" in ua_lower:
+        os_name = "linux"
+    elif "android" in ua_lower:
+        os_name = "android"
+    elif "ios" in ua_lower or "iphone" in ua_lower or "ipad" in ua_lower:
+        os_name = "ios"
+    
+    return {
+        "device": device,
+        "browser": browser,
+        "os": os_name
+    }
