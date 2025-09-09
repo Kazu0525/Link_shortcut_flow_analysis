@@ -1,4 +1,4 @@
-# __init__.py
+# routes/__init__.py
 from .redirect import router as redirect_router
 from .shorten import router as shorten_router
 from .analytics import router as analytics_router
@@ -15,3 +15,4 @@ __all__ = [
     'admin_router'
 
 ]
+
