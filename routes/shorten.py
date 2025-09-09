@@ -1,245 +1,136 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from models import ShortenRequest, ShortenResponse, ErrorResponse
 import sqlite3
+import string
+import random
+import qrcode
+import io
+import base64
 from datetime import datetime
-from models import ShortenRequest, ShortenResponse
-from config import DB_PATH, BASE_URL
-from utils import generate_short_code, generate_qr_code_base64, is_valid_url
+import config
+import os
 
 router = APIRouter()
 
-@router.post("/api/shorten")
+def generate_short_code(length: int = 6) -> str:
+    """短縮コードを生成"""
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
+def create_qr_code(url: str) -> str:
+    """QRコードを生成してBase64エンコードされた文字列を返す"""
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # BytesIOを使用してBase64エンコード
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+    except Exception as e:
+        print(f"QRコード生成エラー: {e}")
+        return ""
+
+@router.post("/api/shorten", response_model=ShortenResponse)
 async def shorten_url(request: ShortenRequest):
     """URL短縮API"""
     try:
-        # URL検証
-        if not is_valid_url(request.url):
-            raise HTTPException(status_code=400, detail="Invalid URL format")
-        
-        conn = sqlite3.connect(DB_PATH)
+        # データベース接続
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
         
-        # カスタムスラッグのチェック
-        short_code = request.custom_slug
-        if short_code:
+        # 短縮コード生成（重複チェック付き）
+        short_code = generate_short_code()
+        while True:
             cursor.execute("SELECT id FROM urls WHERE short_code = ?", (short_code,))
-            if cursor.fetchone():
-                conn.close()
-                raise HTTPException(status_code=400, detail="Custom slug already exists")
-        else:
-            short_code = generate_short_code(conn=conn)
+            if not cursor.fetchone():
+                break
+            short_code = generate_short_code()
         
-        # URLを保存
-        cursor.execute('''
+        # URLをデータベースに保存
+        cursor.execute("""
             INSERT INTO urls (short_code, original_url, custom_name, campaign_name, created_at)
             VALUES (?, ?, ?, ?, ?)
-        ''', (
-            short_code, 
-            request.url, 
-            request.custom_name, 
+        """, (
+            short_code,
+            str(request.url),
+            request.custom_name,
             request.campaign_name,
-            datetime.now()
+            datetime.now().isoformat()
         ))
         
         conn.commit()
         conn.close()
         
-        # レスポンス生成
-        short_url = f"{BASE_URL}/{short_code}"
-        qr_url = f"{BASE_URL}/{short_code}?source=qr"
-        qr_code_base64 = generate_qr_code_base64(qr_url)
+        # 短縮URLの生成
+        short_url = f"{config.BASE_URL}/{short_code}"
         
-        response = ShortenResponse(
+        # QRコード生成
+        qr_code_url = create_qr_code(short_url)
+        
+        return ShortenResponse(
+            success=True,
             short_url=short_url,
             short_code=short_code,
-            original_url=request.url,
-            qr_code_url=qr_url,
-            qr_code_base64=qr_code_base64,
+            original_url=str(request.url),
+            qr_code_url=qr_code_url,
+            created_at=datetime.now().isoformat(),
             custom_name=request.custom_name,
-            campaign_name=request.campaign_name,
-            created_at=datetime.now().isoformat()
+            campaign_name=request.campaign_name
         )
         
-        return response
-        
-    except HTTPException:
-        raise
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=f"データベースエラー: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"URL shortening failed: {str(e)}")
-
-@router.get("/api/urls/{short_code}")
-async def get_url_info(short_code: str):
-    """短縮URL情報取得API"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT short_code, original_url, custom_name, campaign_name, created_at, is_active
-            FROM urls WHERE short_code = ?
-        ''', (short_code,))
-        
-        result = cursor.fetchone()
-        if not result:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Short URL not found")
-        
-        short_code_db, original_url, custom_name, campaign_name, created_at, is_active = result
-        
-        # クリック統計取得
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as total_clicks,
-                COUNT(DISTINCT ip_address) as unique_clicks,
-                COUNT(CASE WHEN source = 'qr' THEN 1 END) as qr_clicks
-            FROM clicks 
-            WHERE url_id = (SELECT id FROM urls WHERE short_code = ?)
-        ''', (short_code,))
-        
-        stats = cursor.fetchone()
-        total_clicks, unique_clicks, qr_clicks = stats if stats else (0, 0, 0)
-        
-        conn.close()
-        
-        return {
-            "short_code": short_code_db,
-            "short_url": f"{BASE_URL}/{short_code_db}",
-            "original_url": original_url,
-            "custom_name": custom_name,
-            "campaign_name": campaign_name,
-            "created_at": created_at,
-            "is_active": is_active,
-            "qr_code_url": f"{BASE_URL}/{short_code_db}?source=qr",
-            "analytics_url": f"{BASE_URL}/analytics/{short_code_db}",
-            "statistics": {
-                "total_clicks": total_clicks,
-                "unique_clicks": unique_clicks,
-                "qr_clicks": qr_clicks
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"URL info retrieval failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"サーバーエラー: {str(e)}")
 
 @router.get("/api/urls")
-async def list_urls(limit: int = 50, offset: int = 0, campaign: str = None):
-    """URL一覧取得API"""
+async def get_all_urls():
+    """全URL一覧取得API"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
         
-        # ベースクエリ
-        base_query = '''
-            SELECT u.short_code, u.original_url, u.custom_name, u.campaign_name, 
-                   u.created_at, u.is_active,
-                   COALESCE(c.total_clicks, 0) as total_clicks,
-                   COALESCE(c.unique_clicks, 0) as unique_clicks,
-                   COALESCE(c.qr_clicks, 0) as qr_clicks
+        cursor.execute("""
+            SELECT 
+                u.id, u.short_code, u.original_url, u.custom_name, u.campaign_name, 
+                u.created_at, u.is_active,
+                COUNT(c.id) as total_clicks
             FROM urls u
-            LEFT JOIN (
-                SELECT url_id,
-                       COUNT(*) as total_clicks,
-                       COUNT(DISTINCT ip_address) as unique_clicks,
-                       COUNT(CASE WHEN source = 'qr' THEN 1 END) as qr_clicks
-                FROM clicks
-                GROUP BY url_id
-            ) c ON u.id = c.url_id
-        '''
+            LEFT JOIN clicks c ON u.id = c.url_id
+            WHERE u.is_active = 1
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        """)
         
-        # キャンペーンフィルター
-        params = []
-        if campaign:
-            base_query += " WHERE u.campaign_name = ?"
-            params.append(campaign)
-        
-        # ソートと制限
-        base_query += " ORDER BY u.created_at DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-        
-        cursor.execute(base_query, params)
         results = cursor.fetchall()
-        
-        # 総数取得
-        count_query = "SELECT COUNT(*) FROM urls"
-        count_params = []
-        if campaign:
-            count_query += " WHERE campaign_name = ?"
-            count_params.append(campaign)
-            
-        cursor.execute(count_query, count_params)
-        total_count = cursor.fetchone()[0]
-        
         conn.close()
         
-        # レスポンス整形
         urls = []
         for row in results:
-            short_code, original_url, custom_name, campaign_name, created_at, is_active, total_clicks, unique_clicks, qr_clicks = row
-            
             urls.append({
-                "short_code": short_code,
-                "short_url": f"{BASE_URL}/{short_code}",
-                "original_url": original_url,
-                "custom_name": custom_name,
-                "campaign_name": campaign_name,
-                "created_at": created_at,
-                "is_active": is_active,
-                "qr_code_url": f"{BASE_URL}/{short_code}?source=qr",
-                "analytics_url": f"{BASE_URL}/analytics/{short_code}",
-                "statistics": {
-                    "total_clicks": total_clicks,
-                    "unique_clicks": unique_clicks,
-                    "qr_clicks": qr_clicks
-                }
+                "id": row[0],
+                "short_code": row[1],
+                "original_url": row[2],
+                "custom_name": row[3],
+                "campaign_name": row[4],
+                "created_at": row[5],
+                "is_active": bool(row[6]),
+                "total_clicks": row[7],
+                "short_url": f"{config.BASE_URL}/{row[1]}"
             })
         
-        return {
-            "urls": urls,
-            "pagination": {
-                "total": total_count,
-                "limit": limit,
-                "offset": offset,
-                "has_more": offset + limit < total_count
-            },
-            "filter": {
-                "campaign": campaign
-            }
-        }
+        return {"success": True, "urls": urls}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"URL listing failed: {str(e)}")
-
-@router.delete("/api/urls/{short_code}")
-async def delete_url(short_code: str):
-    """URL削除API（非アクティブ化）"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # URLの存在チェック
-        cursor.execute("SELECT id FROM urls WHERE short_code = ?", (short_code,))
-        if not cursor.fetchone():
-            conn.close()
-            raise HTTPException(status_code=404, detail="Short URL not found")
-        
-        # 非アクティブ化（物理削除はしない）
-        cursor.execute('''
-            UPDATE urls SET is_active = FALSE 
-            WHERE short_code = ?
-        ''', (short_code,))
-        
-        conn.commit()
-        conn.close()
-        
-        return {
-            "message": f"Short URL '{short_code}' has been deactivated",
-            "short_code": short_code,
-            "status": "deactivated"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"URL deletion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"エラー: {str(e)}")
