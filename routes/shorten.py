@@ -1,12 +1,18 @@
 # routes/shorten.py
-from fastapi import APIRouter, HTTPException
-from models import ShortenRequest, ShortenResponse, ErrorResponse
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
 import sqlite3
+import secrets
+import string
+import qrcode
+from io import BytesIO
+import base64
 from datetime import datetime
-import config
-import os
-# utilsからインポート
-from utils import generate_short_code, create_qr_code
+
+# 相対インポートを使用
+from ..models import ShortenRequest, ShortenResponse
+from .. import config
+from ..database import get_db_connection
 
 router = APIRouter()
 
@@ -103,4 +109,5 @@ async def get_all_urls():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"エラー: {str(e)}")
+
 
