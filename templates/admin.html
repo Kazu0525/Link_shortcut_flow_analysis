@@ -1,1 +1,562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理ダッシュボード - LinkTrack Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .nav-link {
+            color: #333;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 1.1em;
+            color: #666;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f1f2f6;
+        }
+        
+        .url-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .url-table th,
+        .url-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .url-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .url-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            opacity: 0.9;
+        }
+        
+        .recent-activity {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .activity-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-time {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .url-code {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .truncate {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .filter-section {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-section select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .navigation {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .filter-section {
+                flex-direction: column;
+            }
+            
+            .url-table {
+                font-size: 14px;
+            }
+            
+            .url-table th,
+            .url-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 管理ダッシュボード</h1>
+            <p>URL短縮サービスの統計と管理</p>
+            <p>最終更新: {{ current_time }}</p>
+        </div>
+        
+        <div class="navigation">
+            <a href="/" class="nav-link">🏠 ホーム</a>
+            <a href="/admin" class="nav-link">📊 ダッシュボード</a>
+            <a href="/bulk" class="nav-link">📦 一括生成</a>
+            <a href="/docs" class="nav-link">📚 API文書</a>
+        </div>
+        
+        <!-- エラー表示 -->
+        {% if error %}
+        <div class="error">
+            ⚠️ {{ error }}
+        </div>
+        {% endif %}
+        
+        <!-- システム統計 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ system_stats.total_links }}</div>
+                <div class="stat-label">📎 総短縮URL数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ system_stats.total_clicks }}</div>
+                <div class="stat-label">👆 総クリック数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ system_stats.unique_visitors }}</div>
+                <div class="stat-label">👥 ユニーク訪問者</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ system_stats.qr_clicks or 0 }}</div>
+                <div class="stat-label">📱 QRクリック数</div>
+            </div>
+        </div>
+        
+        <div class="dashboard-grid">
+            <!-- URL一覧 -->
+            <div class="card">
+                <h2>🔗 URL一覧</h2>
+                
+                <div class="filter-section">
+                    <input type="text" class="search-box" placeholder="🔍 URLを検索..." id="searchBox">
+                    <select id="campaignFilter">
+                        <option value="">全キャンペーン</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="refreshData()">🔄 更新</button>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table class="url-table">
+                        <thead>
+                            <tr>
+                                <th>短縮コード</th>
+                                <th>元のURL</th>
+                                <th>カスタム名</th>
+                                <th>クリック数</th>
+                                <th>ステータス</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="urlTableBody">
+                            {% for url in urls_data %}
+                            <tr>
+                                <td><span class="url-code">{{ url.short_code }}</span></td>
+                                <td class="truncate" title="{{ url.original_url }}">{{ url.original_url }}</td>
+                                <td>{{ url.custom_name or '-' }}</td>
+                                <td>{{ url.total_clicks or 0 }}</td>
+                                <td>
+                                    {% if url.is_active %}
+                                    <span class="status-active">🟢 有効</span>
+                                    {% else %}
+                                    <span class="status-inactive">🔴 無効</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/analytics/{{ url.short_code }}" class="btn btn-info">📈 分析</a>
+                                    <button class="btn btn-danger" onclick="toggleStatus('{{ url.short_code }}')">
+                                        {% if url.is_active %}⏸️ 無効化{% else %}▶️ 有効化{% endif %}
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- サイドバー -->
+            <div>
+                <!-- 最近のクリック -->
+                <div class="card">
+                    <h2>🕒 最近のクリック</h2>
+                    <div class="recent-activity">
+                        {% for click in recent_clicks %}
+                        <div class="activity-item">
+                            <div class="activity-content">
+                                <strong>{{ click.short_code }}</strong>
+                                {% if click.custom_name %}({{ click.custom_name }}){% endif %}
+                                <br>
+                                <small>{{ click.source }} - {{ click.ip_address }}</small>
+                            </div>
+                            <div class="activity-time">
+                                {{ click.clicked_at }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- トップパフォーマンス -->
+                <div class="card">
+                    <h2>🏆 トップパフォーマンス</h2>
+                    <div class="recent-activity">
+                        {% for url in top_urls %}
+                        <div class="activity-item">
+                            <div class="activity-content">
+                                <strong>{{ url.short_code }}</strong>
+                                {% if url.custom_name %}({{ url.custom_name }}){% endif %}
+                                <br>
+                                <small>{{ url.total_clicks }}クリック / {{ url.unique_visitors }}ユニーク</small>
+                            </div>
+                            <div>
+                                <a href="/analytics/{{ url.short_code }}" class="btn btn-info">📈</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- クイック操作 -->
+        <div class="card">
+            <h2>⚡ クイック操作</h2>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <a href="/bulk" class="btn btn-primary">📦 一括生成</a>
+                <button class="btn btn-success" onclick="exportData()">💾 データエクスポート</button>
+                <button class="btn btn-info" onclick="showSystemInfo()">ℹ️ システム情報</button>
+                <button class="btn btn-danger" onclick="cleanupData()">🧹 データクリーンアップ</button>
+            </div>
+        </div>
+    </div>
 
+    <script>
+        // データ更新
+        function refreshData() {
+            location.reload();
+        }
+        
+        // URL有効/無効切り替え
+        async function toggleStatus(shortCode) {
+            if (!confirm(`URL '${shortCode}' のステータスを変更しますか？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/url/${shortCode}/toggle`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('エラー: ' + result.message);
+                }
+            } catch (error) {
+                alert('ネットワークエラーが発生しました');
+            }
+        }
+        
+        // データエクスポート
+        function exportData() {
+            window.open('/api/export/all?format=csv', '_blank');
+        }
+        
+        // システム情報表示
+        async function showSystemInfo() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const stats = await response.json();
+                
+                alert(`システム情報:
+                
+総URL数: ${stats.total_links}
+総クリック数: ${stats.total_clicks}
+ユニーク訪問者: ${stats.unique_visitors}
+システム状態: ${stats.system_status}
+最終更新: ${new Date(stats.last_updated).toLocaleString()}`);
+            } catch (error) {
+                alert('システム情報の取得に失敗しました');
+            }
+        }
+        
+        // データクリーンアップ
+        async function cleanupData() {
+            if (!confirm('古いデータをクリーンアップしますか？この操作は元に戻せません。')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/cleanup', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`クリーンアップ完了:
+                    
+削除したURL: ${result.deleted_urls}件
+削除したクリック: ${result.deleted_clicks}件`);
+                    location.reload();
+                } else {
+                    alert('クリーンアップに失敗しました');
+                }
+            } catch (error) {
+                alert('ネットワークエラーが発生しました');
+            }
+        }
+        
+        // 検索機能
+        document.getElementById('searchBox').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#urlTableBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+        
+        // ページ読み込み時の初期化
+        window.addEventListener('load', function() {
+            // キャンペーンフィルターの選択肢を設定
+            const campaigns = [...new Set(
+                Array.from(document.querySelectorAll('#urlTableBody tr')).map(row => {
+                    const cells = row.children;
+                    return cells[2]?.textContent?.trim();
+                }).filter(c => c && c !== '-')
+            )];
+            
+            const campaignFilter = document.getElementById('campaignFilter');
+            campaigns.forEach(campaign => {
+                const option = document.createElement('option');
+                option.value = campaign;
+                option.textContent = campaign;
+                campaignFilter.appendChild(option);
+            });
+        });
+    </script>
+</body>
+</html>
