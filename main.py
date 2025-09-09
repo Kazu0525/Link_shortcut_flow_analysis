@@ -413,52 +413,74 @@ ADMIN_HTML = """
 </html>
 """
 
-# 高品質スプレッドシート風一括生成HTML（完全再現版）
+# ローカル風高品質一括生成HTML（ボタン修正版）
 BULK_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>一括リンク生成 - LinkTracker</title>
+    <title>一括リンク生成システム</title>
     <meta charset="UTF-8">
     <style>
         body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
         .container {{ max-width: 1800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }}
-        .form-section {{ background: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 8px; }}
-        .spreadsheet-container {{ margin: 20px 0; overflow-x: auto; }}
-        .spreadsheet-table {{ width: 100%; border-collapse: collapse; min-width: 1500px; }}
-        .spreadsheet-table th, .spreadsheet-table td {{ border: 1px solid #ddd; padding: 8px; }}
-        .spreadsheet-table th {{ background: #4CAF50; color: white; text-align: center; position: sticky; top: 0; }}
-        .spreadsheet-table input, .spreadsheet-table select {{ width: 100%; border: 1px solid #ccc; padding: 6px; box-sizing: border-box; }}
-        .spreadsheet-table input:focus, .spreadsheet-table select:focus {{ border-color: #2196F3; outline: none; }}
-        .required {{ border-left: 3px solid #f44336; }}
-        .row-number {{ background: #f5f5f5; text-align: center; font-weight: bold; width: 50px; }}
-        .quantity-column {{ width: 80px; text-align: center; }}
-        .action-buttons {{ text-align: center; margin: 20px 0; }}
-        .btn {{ padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }}
-        .btn-primary {{ background: #4CAF50; color: white; }}
-        .btn-secondary {{ background: #2196F3; color: white; }}
-        .btn-danger {{ background: #f44336; color: white; }}
-        .btn-warning {{ background: #FF9800; color: white; }}
-        .results-section {{ margin: 30px 0; }}
-        .result-item {{ background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #4CAF50; }}
-        .error-item {{ background: #ffebee; border-left: 4px solid #f44336; }}
-        .copy-btn {{ background: #FF9800; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 5px; }}
-        .stats-link {{ color: #1976d2; text-decoration: none; font-weight: bold; }}
-        .stats-link:hover {{ text-decoration: underline; }}
-        .loading {{ text-align: center; padding: 20px; }}
-        .spinner {{ border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin: 0 auto; }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; display: flex; align-items: center; }}
+        h1::before {{ content: '🚀'; margin-right: 10px; }}
         .instructions {{ background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-        .delete-row-btn {{ background: #f44336; color: white; border: none; padding: 5px 8px; border-radius: 3px; cursor: pointer; font-size: 12px; }}
+        .instructions h3 {{ margin-bottom: 15px; display: flex; align-items: center; }}
+        .instructions h3::before {{ content: '📋'; margin-right: 8px; }}
+        .action-buttons {{ text-align: center; margin: 20px 0; }}
+        .btn {{ 
+            padding: 8px 16px; margin: 3px; border: none; border-radius: 4px; 
+            cursor: pointer; font-size: 13px; font-weight: 500;
+            transition: all 0.2s ease;
+        }}
+        .btn:hover {{ transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }}
+        .btn-add {{ background: #2196F3; color: white; }}
+        .btn-clear {{ background: #FF9800; color: white; }}
+        .btn-generate {{ background: #f44336; color: white; font-weight: bold; }}
+        .btn-admin {{ background: #4CAF50; color: white; }}
+        .spreadsheet-container {{ margin: 20px 0; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }}
+        .spreadsheet-table {{ width: 100%; border-collapse: collapse; min-width: 1400px; }}
+        .spreadsheet-table th {{ 
+            background: #4CAF50; color: white; text-align: center; 
+            padding: 12px 8px; border: 1px solid #45a049; font-weight: 600;
+        }}
+        .spreadsheet-table td {{ border: 1px solid #ddd; padding: 4px; }}
+        .spreadsheet-table input {{ 
+            width: 100%; border: none; padding: 8px 6px; font-size: 13px;
+            outline: none; background: transparent;
+        }}
+        .spreadsheet-table input:focus {{ background: #fff3cd; }}
+        .row-number {{ background: #f8f9fa; text-align: center; font-weight: bold; width: 60px; }}
+        .delete-btn {{ 
+            background: #dc3545; color: white; border: none; 
+            padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;
+        }}
+        .results-section {{ margin: 30px 0; display: none; }}
+        .result-item {{ 
+            background: #d4edda; padding: 15px; margin: 10px 0; 
+            border-radius: 5px; border-left: 4px solid #28a745; 
+        }}
+        .error-item {{ background: #f8d7da; border-left: 4px solid #dc3545; color: #721c24; }}
+        .copy-btn {{ 
+            background: #fd7e14; color: white; border: none; 
+            padding: 4px 8px; border-radius: 3px; cursor: pointer; margin-left: 8px; 
+        }}
+        .loading {{ text-align: center; padding: 20px; }}
+        .spinner {{ 
+            border: 3px solid #f3f3f3; border-top: 3px solid #4CAF50; 
+            border-radius: 50%; width: 30px; height: 30px; 
+            animation: spin 1s linear infinite; margin: 0 auto; 
+        }}
+        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 一括リンク生成システム</h1>
+        <h1>一括リンク生成システム</h1>
         
         <div class="instructions">
-            <h3>📋 使い方</h3>
+            <h3>使い方</h3>
             <ol>
                 <li><strong>B列（必須）</strong>: 短縮したい元のURLを入力（http:// または https:// で始めてください）</li>
                 <li><strong>C列（任意）</strong>: カスタム短縮コードを入力（空白の場合は自動生成）</li>
@@ -470,190 +492,157 @@ BULK_HTML = """
         </div>
 
         <div class="action-buttons">
-            <button class="btn btn-secondary" id="addRowBtn">➕ 1行追加</button>
-            <button class="btn btn-secondary" id="add5RowsBtn">➕ 5行追加</button>
-            <button class="btn btn-secondary" id="add10RowsBtn">➕ 10行追加</button>
-            <button class="btn btn-warning" id="clearAllBtn">🗑️ 全削除</button>
-            <button class="btn btn-danger" id="generateBtn">🚀 一括生成開始</button>
-            <button class="btn btn-primary" onclick="window.location.href='/admin'">📊 管理画面へ</button>
+            <button type="button" class="btn btn-add" onclick="addRows(1)">➕ 1行追加</button>
+            <button type="button" class="btn btn-add" onclick="addRows(5)">➕ 5行追加</button>
+            <button type="button" class="btn btn-add" onclick="addRows(10)">➕ 10行追加</button>
+            <button type="button" class="btn btn-clear" onclick="clearAllData()">🗑️ 全削除</button>
+            <button type="button" class="btn btn-generate" onclick="startGeneration()">🚀 一括生成開始</button>
+            <button type="button" class="btn btn-admin" onclick="location.href='/admin'">📊 管理画面へ</button>
         </div>
 
         <div class="spreadsheet-container">
-            <table class="spreadsheet-table" id="spreadsheetTable">
+            <table class="spreadsheet-table">
                 <thead>
                     <tr>
-                        <th class="row-number">A<br>行番号</th>
-                        <th style="width: 40%;">B<br>オリジナルURL ※必須</th>
+                        <th style="width: 50px;">A<br>行番号</th>
+                        <th style="width: 35%;">B<br>オリジナルURL ※必須</th>
                         <th style="width: 12%;">C<br>カスタム短縮コード<br>(任意)</th>
                         <th style="width: 12%;">D<br>カスタム名<br>(任意)</th>
                         <th style="width: 12%;">E<br>キャンペーン名<br>(任意)</th>
-                        <th style="width: 8%;" class="quantity-column">F<br>生成数量<br>(任意)</th>
-                        <th style="width: 10%;">操作</th>
+                        <th style="width: 8%;">F<br>生成数量<br>(任意)</th>
+                        <th style="width: 11%;">操作</th>
                     </tr>
                 </thead>
-                <tbody id="spreadsheetBody">
+                <tbody id="dataTable">
                     <tr>
                         <td class="row-number">1</td>
-                        <td><input type="url" class="required" placeholder="https://example.com" required /></td>
+                        <td><input type="url" placeholder="https://example.com" /></td>
                         <td><input type="text" placeholder="例: product01" /></td>
                         <td><input type="text" placeholder="例: 商品A" /></td>
                         <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                        <td><input type="number" min="1" max="20" value="1" class="quantity-column" /></td>
-                        <td><button class="delete-row-btn" onclick="removeRow(this)">⌫ 削除</button></td>
+                        <td><input type="number" min="1" max="20" value="1" /></td>
+                        <td><button class="delete-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
                     </tr>
                 </tbody>
             </table>
         </div>
 
         <div class="action-buttons">
-            <button class="btn btn-secondary" id="addRowBtn2">➕ 1行追加</button>
-            <button class="btn btn-secondary" id="add5RowsBtn2">➕ 5行追加</button>
-            <button class="btn btn-secondary" id="add10RowsBtn2">➕ 10行追加</button>
-            <button class="btn btn-warning" id="clearAllBtn2">🗑️ 全削除</button>
-            <button class="btn btn-danger" id="generateBtn2">🚀 一括生成開始</button>
+            <button type="button" class="btn btn-add" onclick="addRows(1)">➕ 1行追加</button>
+            <button type="button" class="btn btn-add" onclick="addRows(5)">➕ 5行追加</button>
+            <button type="button" class="btn btn-add" onclick="addRows(10)">➕ 10行追加</button>
+            <button type="button" class="btn btn-clear" onclick="clearAllData()">🗑️ 全削除</button>
+            <button type="button" class="btn btn-generate" onclick="startGeneration()">🚀 一括生成開始</button>
         </div>
 
-        <div class="results-section" id="resultsSection" style="display: none;">
+        <div class="results-section" id="resultsArea">
             <h2>📈 生成結果</h2>
             <div id="resultsContent"></div>
         </div>
     </div>
 
     <script>
-        let rowCounter = 1;
+        let rowCount = 1;
         
-        function addRow() {{
-            console.log('addRow function called');
-            rowCounter++;
-            const tbody = document.getElementById('spreadsheetBody');
-            const newRow = tbody.insertRow();
-            newRow.innerHTML = `
-                <td class="row-number">${{rowCounter}}</td>
-                <td><input type="url" class="required" placeholder="https://example.com" required /></td>
-                <td><input type="text" placeholder="例: product${{rowCounter.toString().padStart(2, '0')}}" /></td>
-                <td><input type="text" placeholder="例: 商品${{String.fromCharCode(64 + rowCounter)}}" /></td>
-                <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                <td><input type="number" min="1" max="20" value="1" class="quantity-column" /></td>
-                <td><button class="delete-row-btn" onclick="removeRow(this)">⌫ 削除</button></td>
-            `;
+        // 行追加機能
+        function addRows(count) {{
+            const table = document.getElementById('dataTable');
+            
+            for (let i = 0; i < count; i++) {{
+                rowCount++;
+                const newRow = table.insertRow();
+                newRow.innerHTML = `
+                    <td class="row-number">${{rowCount}}</td>
+                    <td><input type="url" placeholder="https://example.com" /></td>
+                    <td><input type="text" placeholder="例: product${{rowCount.toString().padStart(2, '0')}}" /></td>
+                    <td><input type="text" placeholder="例: 商品${{String.fromCharCode(65 + (rowCount % 26))}}" /></td>
+                    <td><input type="text" placeholder="例: 春キャンペーン" /></td>
+                    <td><input type="number" min="1" max="20" value="1" /></td>
+                    <td><button class="delete-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
+                `;
+            }}
             updateRowNumbers();
         }}
         
-        function addMultipleRows(count) {{
-            console.log('addMultipleRows function called with count:', count);
-            for (let i = 0; i < count; i++) {{
-                addRow();
-            }}
-        }}
-        
-        function removeRow(button) {{
-            console.log('removeRow function called');
-            const row = button.closest('tr');
-            if (document.getElementById('spreadsheetBody').rows.length > 1) {{
-                row.remove();
+        // 行削除機能
+        function deleteRow(button) {{
+            const table = document.getElementById('dataTable');
+            if (table.rows.length > 1) {{
+                button.closest('tr').remove();
                 updateRowNumbers();
             }} else {{
                 alert('最低1行は必要です');
             }}
         }}
         
+        // 行番号更新
         function updateRowNumbers() {{
-            const rows = document.querySelectorAll('#spreadsheetBody tr');
-            rows.forEach((row, index) => {{
-                row.cells[0].textContent = index + 1;
-            }});
-            rowCounter = rows.length;
+            const table = document.getElementById('dataTable');
+            for (let i = 0; i < table.rows.length; i++) {{
+                table.rows[i].cells[0].textContent = i + 1;
+            }}
+            rowCount = table.rows.length;
         }}
         
-        function clearAll() {{
-            console.log('clearAll function called');
+        // 全削除機能
+        function clearAllData() {{
             if (confirm('全てのデータを削除しますか？')) {{
-                document.getElementById('spreadsheetBody').innerHTML = `
+                const table = document.getElementById('dataTable');
+                table.innerHTML = `
                     <tr>
                         <td class="row-number">1</td>
-                        <td><input type="url" class="required" placeholder="https://example.com" required /></td>
+                        <td><input type="url" placeholder="https://example.com" /></td>
                         <td><input type="text" placeholder="例: product01" /></td>
                         <td><input type="text" placeholder="例: 商品A" /></td>
                         <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                        <td><input type="number" min="1" max="20" value="1" class="quantity-column" /></td>
-                        <td><button class="delete-row-btn" onclick="removeRow(this)">⌫ 削除</button></td>
+                        <td><input type="number" min="1" max="20" value="1" /></td>
+                        <td><button class="delete-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
                     </tr>
                 `;
-                rowCounter = 1;
-                document.getElementById('resultsSection').style.display = 'none';
+                rowCount = 1;
+                document.getElementById('resultsArea').style.display = 'none';
             }}
         }}
         
-        function validateAndGenerate() {{
-            console.log('validateAndGenerate function called');
-            const rows = document.querySelectorAll('#spreadsheetBody tr');
-            const data = [];
-            let hasError = false;
+        // 一括生成機能
+        async function startGeneration() {{
+            const table = document.getElementById('dataTable');
+            const urlList = [];
             
-            for (let row of rows) {{
-                const inputs = row.querySelectorAll('input');
-                const originalUrl = inputs[0].value.trim();
-                const customSlug = inputs[1].value.trim();
-                const customName = inputs[2].value.trim();
-                const campaignName = inputs[3].value.trim();
-                const quantity = parseInt(inputs[4].value) || 1;
+            // データ収集
+            for (let i = 0; i < table.rows.length; i++) {{
+                const row = table.rows[i];
+                const url = row.cells[1].querySelector('input').value.trim();
                 
-                if (originalUrl) {{
-                    if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {{
-                        alert('URLは http:// または https:// で始めてください');
-                        inputs[0].focus();
-                        hasError = true;
-                        break;
+                if (url) {{
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {{
+                        alert(`行 ${{i + 1}}: URLは http:// または https:// で始めてください`);
+                        return;
                     }}
-                    
-                    for (let i = 0; i < quantity; i++) {{
-                        let finalCustomSlug = customSlug;
-                        let finalCustomName = customName;
-                        
-                        if (quantity > 1) {{
-                            if (customSlug) finalCustomSlug = customSlug + '_' + (i+1);
-                            if (customName) finalCustomName = customName + '_' + (i+1);
-                        }}
-                        
-                        data.push({{
-                            url: originalUrl,
-                            custom_name: finalCustomName || null,
-                            campaign_name: campaignName || null
-                        }});
-                    }}
+                    urlList.push(url);
                 }}
             }}
             
-            if (hasError) return;
-            
-            if (data.length === 0) {{
+            if (urlList.length === 0) {{
                 alert('少なくとも1つのURLを入力してください');
                 return;
             }}
             
-            if (data.length > 100) {{
-                if (!confirm('一度に ' + data.length + ' 個のURLを生成します。よろしいですか？')) {{
-                    return;
-                }}
-            }}
+            // 生成処理
+            const generateBtns = document.querySelectorAll('.btn-generate');
+            generateBtns.forEach(btn => {{
+                btn.disabled = true;
+                btn.textContent = '⏳ 生成中...';
+            }});
             
-            generateLinks(data);
-        }}
-        
-        async function generateLinks(data) {{
-            const btn = document.getElementById('generateBtn');
-            const resultsSection = document.getElementById('resultsSection');
+            const resultsArea = document.getElementById('resultsArea');
             const resultsContent = document.getElementById('resultsContent');
-            
-            btn.disabled = true;
-            btn.innerHTML = '⏳ 生成中...';
-            resultsSection.style.display = 'block';
+            resultsArea.style.display = 'block';
             resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>リンクを生成しています...</p></div>';
             
             try {{
                 const formData = new FormData();
-                const urlList = data.map(item => item.url).join('\\n');
-                formData.append('urls', urlList);
+                formData.append('urls', urlList.join('\\n'));
                 
                 const response = await fetch('/api/bulk-process', {{
                     method: 'POST',
@@ -661,23 +650,25 @@ BULK_HTML = """
                 }});
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP error! status: ${{response.status}}`);
+                    throw new Error(`処理エラー: ${{response.status}}`);
                 }}
                 
                 const result = await response.json();
-                displayResults(result);
+                showResults(result);
                 
             }} catch (error) {{
-                resultsContent.innerHTML = `<div class="error-item">エラー: ${{error.message}}</div>`;
+                resultsContent.innerHTML = `<div class="error-item">エラーが発生しました: ${{error.message}}</div>`;
             }} finally {{
-                btn.disabled = false;
-                btn.innerHTML = '🚀 一括生成開始';
+                generateBtns.forEach(btn => {{
+                    btn.disabled = false;
+                    btn.textContent = '🚀 一括生成開始';
+                }});
             }}
         }}
         
-        function displayResults(result) {{
+        // 結果表示
+        function showResults(result) {{
             const resultsContent = document.getElementById('resultsContent');
-            
             let successCount = 0;
             let errorCount = 0;
             
@@ -689,14 +680,13 @@ BULK_HTML = """
             }}
             
             let html = `
-                <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                    <h3>📊 生成サマリー</h3>
-                    <p>成功: <strong>${{successCount}}</strong> | エラー: <strong>${{errorCount}}</strong> | 総生成数: <strong>${{successCount + errorCount}}</strong></p>
+                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <h3>📊 生成結果サマリー</h3>
+                    <p>成功: <strong>${{successCount}}</strong> | エラー: <strong>${{errorCount}}</strong> | 合計: <strong>${{successCount + errorCount}}</strong></p>
                 </div>
             `;
             
-            if (result.results && result.results.length > 0) {{
-                html += '<h3>✅ 生成成功</h3>';
+            if (result.results) {{
                 result.results.forEach((item, index) => {{
                     if (item.success) {{
                         html += `
@@ -704,51 +694,33 @@ BULK_HTML = """
                                 <p><strong>${{index + 1}}. 元URL:</strong> ${{item.url}}</p>
                                 <p><strong>短縮URL:</strong> 
                                     <a href="${{item.short_url}}" target="_blank">${{item.short_url}}</a>
-                                    <button class="copy-btn" onclick="copyToClipboard('${{item.short_url}}')">📋 コピー</button>
-                                    <a href="/analytics/${{item.short_url.split('/').pop()}}" target="_blank" class="stats-link">📈 分析</a>
+                                    <button class="copy-btn" onclick="copyText('${{item.short_url}}')">📋 コピー</button>
                                 </p>
                             </div>
                         `;
+                    }} else {{
+                        html += `<div class="error-item">❌ ${{item.url}} - ${{item.error}}</div>`;
                     }}
                 }});
-                
-                // エラー表示
-                const errors = result.results.filter(item => !item.success);
-                if (errors.length > 0) {{
-                    html += '<h3>❌ エラー</h3>';
-                    errors.forEach(item => {{
-                        html += `<div class="error-item">URL: ${{item.url}} - エラー: ${{item.error}}</div>`;
-                    }});
-                }}
             }}
             
             resultsContent.innerHTML = html;
         }}
         
-        function copyToClipboard(text) {{
+        // コピー機能
+        function copyText(text) {{
             navigator.clipboard.writeText(text).then(() => {{
-                alert('クリップボードにコピーしました: ' + text);
+                alert(`クリップボードにコピーしました: ${{text}}`);
+            }}).catch(() => {{
+                prompt('以下のURLをコピーしてください:', text);
             }});
         }}
         
-        // イベントリスナーの設定
-        document.addEventListener('DOMContentLoaded', function() {{
-            // ボタンにイベントリスナーを追加
-            document.getElementById('addRowBtn').addEventListener('click', addRow);
-            document.getElementById('add5RowsBtn').addEventListener('click', () => addMultipleRows(5));
-            document.getElementById('add10RowsBtn').addEventListener('click', () => addMultipleRows(10));
-            document.getElementById('clearAllBtn').addEventListener('click', clearAll);
-            document.getElementById('generateBtn').addEventListener('click', validateAndGenerate);
-            
-            document.getElementById('addRowBtn2').addEventListener('click', addRow);
-            document.getElementById('add5RowsBtn2').addEventListener('click', () => addMultipleRows(5));
-            document.getElementById('add10RowsBtn2').addEventListener('click', () => addMultipleRows(10));
-            document.getElementById('clearAllBtn2').addEventListener('click', clearAll);
-            document.getElementById('generateBtn2').addEventListener('click', validateAndGenerate);
-            
-            // 初期表示時に4行追加（合計5行）
-            addMultipleRows(4);
-            console.log('ページ読み込み完了');
+        // 初期化
+        window.addEventListener('load', function() {{
+            console.log('一括生成システム準備完了');
+            // 初期表示で4行追加
+            addRows(4);
         }});
     </script>
 </body>
