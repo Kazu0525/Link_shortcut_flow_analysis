@@ -1,345 +1,459 @@
-# main.py
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+# main.py - 完全統合版
+from fastapi import FastAPI, Request, HTTPException, Form, File, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import os
 import sqlite3
 from datetime import datetime
 import uvicorn
+import string
+import random
+import re
 
-# 設定とデータベース初期化
-import config
-import database
+# 設定
+BASE_URL = os.getenv("BASE_URL", "https://link-shortcut-flow-analysis.onrender.com")
+DB_PATH = os.getenv("DB_PATH", "url_shortener.db")
 
-# 初期化時にデータベースを作成
-database.init_db()
+# データベース初期化
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # URLsテーブル
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS urls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            short_code TEXT UNIQUE NOT NULL,
+            original_url TEXT NOT NULL,
+            custom_name TEXT,
+            campaign_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT TRUE
+        )
+    ''')
+    
+    # Clicksテーブル
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url_id INTEGER NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            referrer TEXT,
+            source TEXT DEFAULT 'direct',
+            clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (url_id) REFERENCES urls (id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
 
-# FastAPIアプリケーション作成
+# ユーティリティ関数
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def generate_short_code(length=6):
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choices(chars, k=length))
+
+def validate_url(url):
+    pattern = re.compile(
+        r'^https?://'  # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+        r'localhost|'  # localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+        r'(?::\d+)?'  # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+    return bool(pattern.match(url))
+
+def clean_url(url):
+    return url.strip()
+
+# データベース初期化
+init_db()
+
+# FastAPIアプリ
 app = FastAPI(
     title="LinkTrack Pro",
-    description="マーケティング効果測定のためのURL短縮・分析プラットフォーム",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    description="URL短縮・分析プラットフォーム",
+    version="1.0.0"
 )
 
-# ルーターのインポート（絶対インポートに統一）
-from routes.redirect import router as redirect_router
-from routes.shorten import router as shorten_router
-from routes.analytics import router as analytics_router
-from routes.bulk import router as bulk_router
-from routes.export import router as export_router
-from routes.admin import router as admin_router
-
-# ルーターを登録
-app.include_router(redirect_router)
-app.include_router(shorten_router)
-app.include_router(analytics_router)
-app.include_router(bulk_router)
-app.include_router(export_router)
-app.include_router(admin_router)
-
-# シンプルなインライン HTML（CSSエスケープ済み）
+# HTMLテンプレート
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkTrack Pro - URL短縮・分析プラットフォーム</title>
+    <title>LinkTrack Pro</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6; color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }}
-        .container {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
-        .header {{ text-align: center; color: white; margin-bottom: 30px; }}
-        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }}
-        .header p {{ font-size: 1.2em; opacity: 0.9; }}
-        .main-content {{
-            background: white; border-radius: 20px; padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1); margin-bottom: 30px;
-        }}
-        .url-form {{ background: #f8f9fa; padding: 30px; border-radius: 15px; margin-bottom: 30px; }}
+        body {{ font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }}
+        .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
+        h1 {{ color: #333; text-align: center; margin-bottom: 30px; }}
         .form-group {{ margin-bottom: 20px; }}
-        .form-group label {{ display: block; margin-bottom: 8px; font-weight: 600; color: #555; }}
-        .form-group input {{ width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; }}
-        .form-group input:focus {{ outline: none; border-color: #667eea; }}
-        .btn {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 12px 30px; border: none; border-radius: 8px;
-            font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s;
-        }}
-        .btn:hover {{ transform: translateY(-2px); }}
-        .btn-secondary {{ background: #6c757d; margin-left: 10px; }}
-        .stats-grid {{
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px; margin-bottom: 30px;
-        }}
-        .stat-card {{
-            background: linear-gradient(135deg, #ff6b6b 0%, #ffa726 100%);
-            color: white; padding: 20px; border-radius: 15px; text-align: center;
-        }}
-        .stat-card:nth-child(2) {{ background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }}
-        .stat-card:nth-child(3) {{ background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }}
-        .stat-card:nth-child(4) {{ background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%); color: #333; }}
-        .stat-number {{ font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }}
-        .stat-label {{ font-size: 1.1em; opacity: 0.9; }}
-        .navigation {{ display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }}
-        .nav-link {{
-            color: white; text-decoration: none; padding: 10px 20px;
-            background: rgba(255,255,255,0.2); border-radius: 25px; transition: background 0.3s;
-        }}
-        .nav-link:hover {{ background: rgba(255,255,255,0.3); }}
-        .result-section {{ background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px; display: none; }}
-        .result-success {{ background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }}
-        .result-error {{ background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }}
-        .copy-button {{ background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; margin-left: 10px; }}
-        .footer {{ text-align: center; color: white; margin-top: 30px; opacity: 0.8; }}
+        label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
+        input {{ width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }}
+        .btn {{ background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }}
+        .btn:hover {{ background: #0056b3; }}
+        .nav {{ text-align: center; margin-bottom: 20px; }}
+        .nav a {{ margin: 0 10px; text-decoration: none; color: #007bff; }}
+        .result {{ margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 5px; }}
+        .error {{ background: #f8d7da; color: #721c24; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🔗 LinkTrack Pro</h1>
-            <p>マーケティング効果測定のためのURL短縮・分析プラットフォーム</p>
+        <h1>🔗 LinkTrack Pro</h1>
+        <div class="nav">
+            <a href="/">ホーム</a>
+            <a href="/admin">管理</a>
+            <a href="/bulk">一括生成</a>
         </div>
         
-        <div class="navigation">
-            <a href="/" class="nav-link">🏠 ホーム</a>
-            <a href="/admin" class="nav-link">📊 管理ダッシュボード</a>
-            <a href="/bulk" class="nav-link">📦 一括生成</a>
-            <a href="/docs" class="nav-link">📚 API文書</a>
+        <div class="stats">
+            <p>総URL数: {total_links} | 総クリック数: {total_clicks}</p>
         </div>
         
-        <div class="main-content">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">{total_links}</div>
-                    <div class="stat-label">総短縮URL数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{total_clicks}</div>
-                    <div class="stat-label">総クリック数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{unique_visitors}</div>
-                    <div class="stat-label">ユニーク訪問者</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">🟢</div>
-                    <div class="stat-label">{system_status}</div>
-                </div>
+        <form id="urlForm" method="post" action="/api/shorten-form">
+            <div class="form-group">
+                <label for="url">URL *</label>
+                <input type="url" id="url" name="url" required placeholder="https://example.com">
             </div>
-            
-            <div class="url-form">
-                <h2>🚀 URL短縮サービス</h2>
-                <form id="shortenForm">
-                    <div class="form-group">
-                        <label for="url">短縮したいURL *</label>
-                        <input type="url" id="url" name="url" required placeholder="https://example.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="custom_name">カスタム名（任意）</label>
-                        <input type="text" id="custom_name" name="custom_name" placeholder="わかりやすい名前">
-                    </div>
-                    <div class="form-group">
-                        <label for="campaign_name">キャンペーン名（任意）</label>
-                        <input type="text" id="campaign_name" name="campaign_name" placeholder="マーケティングキャンペーン名">
-                    </div>
-                    <button type="submit" class="btn">🔗 短縮URLを生成</button>
-                    <button type="button" class="btn btn-secondary" onclick="clearForm()">🗑️ クリア</button>
-                </form>
+            <div class="form-group">
+                <label for="custom_name">カスタム名</label>
+                <input type="text" id="custom_name" name="custom_name" placeholder="わかりやすい名前">
             </div>
-            
-            <div id="resultSection" class="result-section">
-                <div id="resultContent"></div>
-            </div>
-        </div>
+            <button type="submit" class="btn">短縮URLを生成</button>
+        </form>
         
-        <div class="footer">
-            <p>© 2025 LinkTrack Pro - Powered by FastAPI & Render.com</p>
-            <p>Base URL: {base_url}</p>
-        </div>
+        <div id="result" style="display:none;"></div>
     </div>
-
+    
     <script>
-        document.getElementById('shortenForm').addEventListener('submit', async function(e) {{
-            e.preventDefault();
-            const formData = new FormData(this);
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            
-            submitButton.textContent = '🔄 処理中...';
-            submitButton.disabled = true;
-            
-            try {{
-                const response = await fetch('/api/shorten-form', {{
-                    method: 'POST',
-                    body: formData
-                }});
-                
-                const result = await response.json();
-                
-                if (response.ok) {{
-                    showResult(result, 'success');
-                }} else {{
-                    showResult({{error: result.detail || '処理に失敗しました'}}, 'error');
-                }}
-            }} catch (error) {{
-                showResult({{error: 'ネットワークエラーが発生しました'}}, 'error');
-            }} finally {{
-                submitButton.textContent = originalText;
-                submitButton.disabled = false;
-            }}
-        }});
+    document.getElementById('urlForm').addEventListener('submit', async function(e) {{
+        e.preventDefault();
+        const formData = new FormData(this);
         
-        function showResult(data, type) {{
-            const section = document.getElementById('resultSection');
-            const content = document.getElementById('resultContent');
+        try {{
+            const response = await fetch('/api/shorten-form', {{
+                method: 'POST',
+                body: formData
+            }});
             
-            section.className = `result-section result-${{type}}`;
-            section.style.display = 'block';
+            const result = await response.json();
+            const resultDiv = document.getElementById('result');
             
-            if (type === 'success') {{
-                content.innerHTML = `
-                    <h3>✅ 短縮URL生成完了</h3>
-                    <div style="margin: 15px 0;">
-                        <strong>短縮URL:</strong> 
-                        <span id="shortUrl">${{data.short_url}}</span>
-                        <button class="copy-button" onclick="copyToClipboard('${{data.short_url}}')">📋 コピー</button>
-                    </div>
-                    <div style="margin: 15px 0;">
-                        <strong>元のURL:</strong> ${{data.original_url}}
-                    </div>
-                    ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
-                    ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
-                    <div style="margin-top: 20px;">
-                        <a href="/analytics/${{data.short_code}}" class="btn">📈 分析ページ</a>
+            if (response.ok) {{
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3>✅ 生成完了</h3>
+                        <p><strong>短縮URL:</strong> <a href="${{result.short_url}}" target="_blank">${{result.short_url}}</a></p>
+                        <p><strong>元URL:</strong> ${{result.original_url}}</p>
                     </div>
                 `;
             }} else {{
-                content.innerHTML = `
-                    <h3>❌ エラーが発生しました</h3>
-                    <p>${{data.error}}</p>
-                `;
+                resultDiv.innerHTML = `<div class="result error">エラー: ${{result.detail}}</div>`;
             }}
-            section.scrollIntoView({{ behavior: 'smooth' }});
+            resultDiv.style.display = 'block';
+        }} catch (error) {{
+            document.getElementById('result').innerHTML = `<div class="result error">ネットワークエラー</div>`;
+            document.getElementById('result').style.display = 'block';
         }}
-        
-        function copyToClipboard(text) {{
-            navigator.clipboard.writeText(text).then(function() {{
-                alert('📋 クリップボードにコピーしました！');
-            }}).catch(function() {{
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('📋 クリップボードにコピーしました！');
-            }});
-        }}
-        
-        function clearForm() {{
-            document.getElementById('shortenForm').reset();
-            document.getElementById('resultSection').style.display = 'none';
-        }}
+    }});
     </script>
 </body>
 </html>
 """
 
+ADMIN_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>管理画面</title>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        th {{ background-color: #f2f2f2; }}
+        .btn {{ background: #007bff; color: white; padding: 5px 10px; border: none; border-radius: 3px; }}
+    </style>
+</head>
+<body>
+    <h1>📊 管理画面</h1>
+    <p><a href="/">← ホームに戻る</a></p>
+    
+    <table>
+        <tr>
+            <th>短縮コード</th>
+            <th>元URL</th>
+            <th>カスタム名</th>
+            <th>クリック数</th>
+            <th>作成日</th>
+            <th>操作</th>
+        </tr>
+        {table_rows}
+    </table>
+</body>
+</html>
+"""
+
+BULK_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>一括生成</title>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .form-group {{ margin-bottom: 15px; }}
+        textarea {{ width: 100%; height: 200px; }}
+        .btn {{ background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; }}
+    </style>
+</head>
+<body>
+    <h1>📦 一括生成</h1>
+    <p><a href="/">← ホームに戻る</a></p>
+    
+    <form method="post" action="/api/bulk-process">
+        <div class="form-group">
+            <label>URLリスト (1行に1URL)</label>
+            <textarea name="urls" placeholder="https://example1.com&#10;https://example2.com&#10;https://example3.com" required></textarea>
+        </div>
+        <button type="submit" class="btn">一括生成</button>
+    </form>
+</body>
+</html>
+"""
+
+# ルート定義
+
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    """メインページ（インライン版）"""
+async def root():
     try:
-        # システム統計取得
-        conn = sqlite3.connect(config.DB_PATH)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 基本統計を取得
         cursor.execute("SELECT COUNT(*) FROM urls")
         total_links = cursor.fetchone()[0]
         
         cursor.execute("SELECT COUNT(*) FROM clicks")
         total_clicks = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(DISTINCT ip_address) FROM clicks")
-        unique_visitors = cursor.fetchone()[0]
-        
         conn.close()
         
-        # HTMLに統計を埋め込み
         html_content = INDEX_HTML.format(
             total_links=total_links,
-            total_clicks=total_clicks,
-            unique_visitors=unique_visitors,
-            system_status="正常稼働中",
-            base_url=config.BASE_URL
+            total_clicks=total_clicks
         )
+        return HTMLResponse(content=html_content)
+    except:
+        html_content = INDEX_HTML.format(total_links=0, total_clicks=0)
+        return HTMLResponse(content=html_content)
+
+@app.post("/api/shorten-form")
+async def shorten_form(url: str = Form(...), custom_name: str = Form("")):
+    try:
+        if not validate_url(url):
+            raise HTTPException(status_code=400, detail="無効なURLです")
         
+        # 短縮コード生成
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        short_code = generate_short_code()
+        while True:
+            cursor.execute("SELECT 1 FROM urls WHERE short_code = ?", (short_code,))
+            if not cursor.fetchone():
+                break
+            short_code = generate_short_code()
+        
+        # 保存
+        cursor.execute("""
+            INSERT INTO urls (short_code, original_url, custom_name, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (short_code, clean_url(url), custom_name or None, datetime.now().isoformat()))
+        
+        conn.commit()
+        conn.close()
+        
+        return JSONResponse({
+            "success": True,
+            "short_code": short_code,
+            "short_url": f"{BASE_URL}/{short_code}",
+            "original_url": url,
+            "custom_name": custom_name
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT u.short_code, u.original_url, u.custom_name, u.created_at,
+                   COUNT(c.id) as click_count
+            FROM urls u
+            LEFT JOIN clicks c ON u.id = c.url_id
+            WHERE u.is_active = 1
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+            LIMIT 50
+        """)
+        
+        urls = cursor.fetchall()
+        conn.close()
+        
+        table_rows = ""
+        for url in urls:
+            table_rows += f"""
+            <tr>
+                <td>{url[0]}</td>
+                <td><a href="{url[1]}" target="_blank">{url[1][:50]}...</a></td>
+                <td>{url[2] or '-'}</td>
+                <td>{url[4]}</td>
+                <td>{url[3]}</td>
+                <td><a href="/analytics/{url[0]}" class="btn">分析</a></td>
+            </tr>
+            """
+        
+        html_content = ADMIN_HTML.format(table_rows=table_rows)
         return HTMLResponse(content=html_content)
         
     except Exception as e:
-        # エラー時のフォールバック
-        html_content = INDEX_HTML.format(
-            total_links=0,
-            total_clicks=0,
-            unique_visitors=0,
-            system_status="初期化中",
-            base_url=config.BASE_URL
-        )
-        return HTMLResponse(content=html_content)
+        return HTMLResponse(content=f"<h1>エラー</h1><p>{str(e)}</p>", status_code=500)
+
+@app.get("/bulk", response_class=HTMLResponse)
+async def bulk_page():
+    return HTMLResponse(content=BULK_HTML)
+
+@app.post("/api/bulk-process")
+async def bulk_process(urls: str = Form(...)):
+    try:
+        url_list = [url.strip() for url in urls.split('\n') if url.strip()]
+        results = []
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        for url in url_list:
+            if validate_url(url):
+                short_code = generate_short_code()
+                while True:
+                    cursor.execute("SELECT 1 FROM urls WHERE short_code = ?", (short_code,))
+                    if not cursor.fetchone():
+                        break
+                    short_code = generate_short_code()
+                
+                cursor.execute("""
+                    INSERT INTO urls (short_code, original_url, created_at)
+                    VALUES (?, ?, ?)
+                """, (short_code, clean_url(url), datetime.now().isoformat()))
+                
+                results.append({
+                    "url": url,
+                    "short_url": f"{BASE_URL}/{short_code}",
+                    "success": True
+                })
+            else:
+                results.append({"url": url, "success": False, "error": "無効なURL"})
+        
+        conn.commit()
+        conn.close()
+        
+        return JSONResponse({"results": results})
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/analytics/{short_code}", response_class=HTMLResponse)
+async def analytics_page(short_code: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT original_url, created_at FROM urls WHERE short_code = ?", (short_code,))
+        url_data = cursor.fetchone()
+        
+        if not url_data:
+            return HTMLResponse(content="<h1>404</h1><p>URLが見つかりません</p>", status_code=404)
+        
+        cursor.execute("""
+            SELECT COUNT(*) as total_clicks, COUNT(DISTINCT ip_address) as unique_visitors
+            FROM clicks c
+            JOIN urls u ON c.url_id = u.id
+            WHERE u.short_code = ?
+        """, (short_code,))
+        
+        stats = cursor.fetchone()
+        conn.close()
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>分析 - {short_code}</title></head>
+        <body style="font-family: Arial; margin: 20px;">
+            <h1>📈 分析: {short_code}</h1>
+            <p><a href="/admin">← 管理画面に戻る</a></p>
+            <p><strong>元URL:</strong> <a href="{url_data[0]}" target="_blank">{url_data[0]}</a></p>
+            <p><strong>短縮URL:</strong> <a href="{BASE_URL}/{short_code}" target="_blank">{BASE_URL}/{short_code}</a></p>
+            <p><strong>総クリック数:</strong> {stats[0] if stats else 0}</p>
+            <p><strong>ユニーク訪問者:</strong> {stats[1] if stats else 0}</p>
+            <p><strong>作成日:</strong> {url_data[1]}</p>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html)
+        
+    except Exception as e:
+        return HTMLResponse(content=f"<h1>エラー</h1><p>{str(e)}</p>", status_code=500)
 
 @app.get("/health")
 async def health_check():
-    """ヘルスチェックエンドポイント"""
+    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat()})
+
+# リダイレクト処理（最後に配置）
+@app.get("/{short_code}")
+async def redirect_url(short_code: str, request: Request):
     try:
-        # データベース接続確認
-        conn = sqlite3.connect(config.DB_PATH)
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT 1")
+        
+        cursor.execute("SELECT id, original_url FROM urls WHERE short_code = ? AND is_active = 1", (short_code,))
+        result = cursor.fetchone()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="無効な短縮コードです")
+        
+        url_id, original_url = result
+        
+        # クリック記録
+        client_ip = request.client.host
+        user_agent = request.headers.get("user-agent", "")
+        referrer = request.headers.get("referer", "")
+        
+        cursor.execute("""
+            INSERT INTO clicks (url_id, ip_address, user_agent, referrer, clicked_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (url_id, client_ip, user_agent, referrer, datetime.now().isoformat()))
+        
+        conn.commit()
         conn.close()
         
-        return JSONResponse({
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "database": "connected",
-            "version": "1.0.0"
-        })
+        return RedirectResponse(url=original_url, status_code=302)
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        return JSONResponse({
-            "status": "unhealthy", 
-            "timestamp": datetime.now().isoformat(),
-            "error": str(e)
-        }, status_code=500)
-
-@app.get("/api/info")
-async def api_info():
-    """API情報エンドポイント"""
-    return JSONResponse({
-        "name": "LinkTrack Pro API",
-        "version": "1.0.0",
-        "description": "URL短縮・分析プラットフォーム",
-        "base_url": config.BASE_URL,
-        "endpoints": {
-            "shorten": "/api/shorten",
-            "analytics": "/analytics/{short_code}",
-            "admin": "/admin",
-            "bulk": "/bulk",
-            "export": "/api/export",
-            "health": "/health"
-        }
-    })
+        raise HTTPException(status_code=500, detail="リダイレクトエラー")
 
 if __name__ == "__main__":
-    # 開発サーバー起動（本番ではuvicornコマンドを使用）
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
