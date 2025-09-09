@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request  # Requestを確認
 import sqlite3
 from models import URLCreate, URLResponse
 from config import DB_PATH, BASE_URL
@@ -55,4 +55,5 @@ async def shorten_url(url_data: URLCreate):
     except HTTPException:
         raise
     except Exception as e:
+
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
