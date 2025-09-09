@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request  # Requestを確認
 from fastapi.responses import HTMLResponse
 import sqlite3
 from typing import List, Dict, Any
@@ -437,4 +437,5 @@ async def bulk_generate_urls(request: BulkGenerationRequest):
         }
         
     except Exception as e:
+
         raise HTTPException(status_code=500, detail=f"Bulk generation failed: {str(e)}")
