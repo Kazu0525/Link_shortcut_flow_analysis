@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request  # Requestを確認
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 import sqlite3
 from typing import List, Dict, Any
@@ -360,12 +360,13 @@ BULK_HTML = """
 </html>
 """
 
-@router.get("/bulk")
+# **重要: パス変更 - prefixなしにする**
+@router.get("/bulk")  # ← ここを変更（/bulkから/bulkへ）
 async def bulk_generation_page():
     """一括生成ページ"""
     return HTMLResponse(content=BULK_HTML)
 
-@router.post("/bulk-generate")
+@router.post("/bulk-generate")  # ← ここも変更
 async def bulk_generate_urls(request: BulkGenerationRequest):
     """複数URLを一括生成"""
     results = []
@@ -388,9 +389,9 @@ async def bulk_generate_urls(request: BulkGenerationRequest):
                 
                 # URLを保存
                 cursor.execute('''
-                    INSERT INTO urls (short_code, original_url, custom_name, campaign_name, created_by) 
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (short_code, item.original_url, item.custom_name, item.campaign_name, 'bulk_api'))
+                    INSERT INTO urls (short_code, original_url, custom_name, campaign_name) 
+                    VALUES (?, ?, ?, ?)
+                ''', (short_code, item.original_url, item.custom_name, item.campaign_name))
                 
                 # 作成時刻取得
                 cursor.execute("SELECT created_at FROM urls WHERE short_code = ?", (short_code,))
@@ -437,5 +438,4 @@ async def bulk_generate_urls(request: BulkGenerationRequest):
         }
         
     except Exception as e:
-
         raise HTTPException(status_code=500, detail=f"Bulk generation failed: {str(e)}")
