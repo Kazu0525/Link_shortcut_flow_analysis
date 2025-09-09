@@ -53,12 +53,13 @@ app.add_middleware(
 )
 
 # ルーターの登録 - 個別のルーターを使用
-app.include_router(redirect_router)
-app.include_router(shorten_router)
-app.include_router(analytics_router)
-app.include_router(bulk_router)
-app.include_router(export_router)
-app.include_router(admin_router)
+# ルーターの登録 - 正しいプレフィックスを設定
+app.include_router(redirect_router, prefix="")
+app.include_router(shorten_router, prefix="")
+app.include_router(analytics_router, prefix="/analytics")
+app.include_router(bulk_router, prefix="/bulk")
+app.include_router(export_router, prefix="/export")
+app.include_router(admin_router, prefix="/admin")
 
 # ルートページ
 @app.get("/")
@@ -86,3 +87,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
