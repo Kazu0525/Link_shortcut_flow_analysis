@@ -6,6 +6,10 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import config
 from database import init_db
+
+# まず models をインポート（他のインポートの前に）
+from models import ShortenRequest, ShortenResponse, BulkRequest, BulkResponse, AnalyticsData, ClickDetail, SystemStats, ErrorResponse
+
 # 個別にルーターをインポート
 from routes.redirect import router as redirect_router
 from routes.shorten import router as shorten_router
@@ -35,6 +39,7 @@ async def lifespan(app: FastAPI):
 
     # シャットダウン時処理
     print("🛑 Shutting down...")
+
 app = FastAPI(
     title="Enhanced Link Tracker API", 
     version="2.0.0",
@@ -93,4 +98,5 @@ async def health_check():
 if name == "main":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
