@@ -38,7 +38,7 @@ app.include_router(bulk_router)
 app.include_router(export_router)
 app.include_router(admin_router)
 
-# シンプルなインライン HTML（テンプレート不要版）
+# シンプルなインライン HTML（CSSエスケープ済み）
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="ja">
@@ -47,57 +47,57 @@ INDEX_HTML = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LinkTrack Pro - URL短縮・分析プラットフォーム</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6; color: #333;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .header { text-align: center; color: white; margin-bottom: 30px; }
-        .header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }
-        .header p { font-size: 1.2em; opacity: 0.9; }
-        .main-content {
+        }}
+        .container {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
+        .header {{ text-align: center; color: white; margin-bottom: 30px; }}
+        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }}
+        .header p {{ font-size: 1.2em; opacity: 0.9; }}
+        .main-content {{
             background: white; border-radius: 20px; padding: 40px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1); margin-bottom: 30px;
-        }
-        .url-form { background: #f8f9fa; padding: 30px; border-radius: 15px; margin-bottom: 30px; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
-        .form-group input { width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; }
-        .form-group input:focus { outline: none; border-color: #667eea; }
-        .btn {
+        }}
+        .url-form {{ background: #f8f9fa; padding: 30px; border-radius: 15px; margin-bottom: 30px; }}
+        .form-group {{ margin-bottom: 20px; }}
+        .form-group label {{ display: block; margin-bottom: 8px; font-weight: 600; color: #555; }}
+        .form-group input {{ width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; }}
+        .form-group input:focus {{ outline: none; border-color: #667eea; }}
+        .btn {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; padding: 12px 30px; border: none; border-radius: 8px;
             font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s;
-        }
-        .btn:hover { transform: translateY(-2px); }
-        .btn-secondary { background: #6c757d; margin-left: 10px; }
-        .stats-grid {
+        }}
+        .btn:hover {{ transform: translateY(-2px); }}
+        .btn-secondary {{ background: #6c757d; margin-left: 10px; }}
+        .stats-grid {{
             display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px; margin-bottom: 30px;
-        }
-        .stat-card {
+        }}
+        .stat-card {{
             background: linear-gradient(135deg, #ff6b6b 0%, #ffa726 100%);
             color: white; padding: 20px; border-radius: 15px; text-align: center;
-        }
-        .stat-card:nth-child(2) { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }
-        .stat-card:nth-child(3) { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }
-        .stat-card:nth-child(4) { background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%); color: #333; }
-        .stat-number { font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }
-        .stat-label { font-size: 1.1em; opacity: 0.9; }
-        .navigation { display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }
-        .nav-link {
+        }}
+        .stat-card:nth-child(2) {{ background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }}
+        .stat-card:nth-child(3) {{ background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }}
+        .stat-card:nth-child(4) {{ background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%); color: #333; }}
+        .stat-number {{ font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }}
+        .stat-label {{ font-size: 1.1em; opacity: 0.9; }}
+        .navigation {{ display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }}
+        .nav-link {{
             color: white; text-decoration: none; padding: 10px 20px;
             background: rgba(255,255,255,0.2); border-radius: 25px; transition: background 0.3s;
-        }
-        .nav-link:hover { background: rgba(255,255,255,0.3); }
-        .result-section { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px; display: none; }
-        .result-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
-        .result-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-        .copy-button { background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; margin-left: 10px; }
-        .footer { text-align: center; color: white; margin-top: 30px; opacity: 0.8; }
+        }}
+        .nav-link:hover {{ background: rgba(255,255,255,0.3); }}
+        .result-section {{ background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px; display: none; }}
+        .result-success {{ background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }}
+        .result-error {{ background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }}
+        .copy-button {{ background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; margin-left: 10px; }}
+        .footer {{ text-align: center; color: white; margin-top: 30px; opacity: 0.8; }}
     </style>
 </head>
 <body>
@@ -166,7 +166,7 @@ INDEX_HTML = """
     </div>
 
     <script>
-        document.getElementById('shortenForm').addEventListener('submit', async function(e) {
+        document.getElementById('shortenForm').addEventListener('submit', async function(e) {{
             e.preventDefault();
             const formData = new FormData(this);
             const submitButton = this.querySelector('button[type="submit"]');
@@ -175,64 +175,64 @@ INDEX_HTML = """
             submitButton.textContent = '🔄 処理中...';
             submitButton.disabled = true;
             
-            try {
-                const response = await fetch('/api/shorten-form', {
+            try {{
+                const response = await fetch('/api/shorten-form', {{
                     method: 'POST',
                     body: formData
-                });
+                }});
                 
                 const result = await response.json();
                 
-                if (response.ok) {
+                if (response.ok) {{
                     showResult(result, 'success');
-                } else {
-                    showResult({error: result.detail || '処理に失敗しました'}, 'error');
-                }
-            } catch (error) {
-                showResult({error: 'ネットワークエラーが発生しました'}, 'error');
-            } finally {
+                }} else {{
+                    showResult({{error: result.detail || '処理に失敗しました'}}, 'error');
+                }}
+            }} catch (error) {{
+                showResult({{error: 'ネットワークエラーが発生しました'}}, 'error');
+            }} finally {{
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
-            }
-        });
+            }}
+        }});
         
-        function showResult(data, type) {
+        function showResult(data, type) {{
             const section = document.getElementById('resultSection');
             const content = document.getElementById('resultContent');
             
-            section.className = `result-section result-${type}`;
+            section.className = `result-section result-${{type}}`;
             section.style.display = 'block';
             
-            if (type === 'success') {
+            if (type === 'success') {{
                 content.innerHTML = `
                     <h3>✅ 短縮URL生成完了</h3>
                     <div style="margin: 15px 0;">
                         <strong>短縮URL:</strong> 
-                        <span id="shortUrl">${data.short_url}</span>
-                        <button class="copy-button" onclick="copyToClipboard('${data.short_url}')">📋 コピー</button>
+                        <span id="shortUrl">${{data.short_url}}</span>
+                        <button class="copy-button" onclick="copyToClipboard('${{data.short_url}}')">📋 コピー</button>
                     </div>
                     <div style="margin: 15px 0;">
-                        <strong>元のURL:</strong> ${data.original_url}
+                        <strong>元のURL:</strong> ${{data.original_url}}
                     </div>
-                    ${data.custom_name ? `<div><strong>カスタム名:</strong> ${data.custom_name}</div>` : ''}
-                    ${data.campaign_name ? `<div><strong>キャンペーン:</strong> ${data.campaign_name}</div>` : ''}
+                    ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
+                    ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
                     <div style="margin-top: 20px;">
-                        <a href="/analytics/${data.short_code}" class="btn">📈 分析ページ</a>
+                        <a href="/analytics/${{data.short_code}}" class="btn">📈 分析ページ</a>
                     </div>
                 `;
-            } else {
+            }} else {{
                 content.innerHTML = `
                     <h3>❌ エラーが発生しました</h3>
-                    <p>${data.error}</p>
+                    <p>${{data.error}}</p>
                 `;
-            }
-            section.scrollIntoView({ behavior: 'smooth' });
-        }
+            }}
+            section.scrollIntoView({{ behavior: 'smooth' }});
+        }}
         
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(function() {
+        function copyToClipboard(text) {{
+            navigator.clipboard.writeText(text).then(function() {{
                 alert('📋 クリップボードにコピーしました！');
-            }).catch(function() {
+            }}).catch(function() {{
                 const textArea = document.createElement('textarea');
                 textArea.value = text;
                 document.body.appendChild(textArea);
@@ -240,19 +240,18 @@ INDEX_HTML = """
                 document.execCommand('copy');
                 document.body.removeChild(textArea);
                 alert('📋 クリップボードにコピーしました！');
-            });
-        }
+            }});
+        }}
         
-        function clearForm() {
+        function clearForm() {{
             document.getElementById('shortenForm').reset();
             document.getElementById('resultSection').style.display = 'none';
-        }
+        }}
     </script>
 </body>
 </html>
 """
 
-# ★★★ 重要: @router.get を @app.get に変更 ★★★
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """メインページ（インライン版）"""
@@ -295,7 +294,6 @@ async def root(request: Request):
         )
         return HTMLResponse(content=html_content)
 
-# ★★★ 重要: @router.get を @app.get に変更 ★★★
 @app.get("/health")
 async def health_check():
     """ヘルスチェックエンドポイント"""
@@ -319,7 +317,6 @@ async def health_check():
             "error": str(e)
         }, status_code=500)
 
-# ★★★ 重要: @router.get を @app.get に変更 ★★★
 @app.get("/api/info")
 async def api_info():
     """API情報エンドポイント"""
