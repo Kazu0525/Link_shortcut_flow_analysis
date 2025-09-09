@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request  # Requestを確認
 from fastapi.responses import Response
 import sqlite3
 import csv
@@ -68,4 +68,5 @@ async def export_clicks_csv(short_code: str):
     except HTTPException:
         raise
     except Exception as e:
+
         raise HTTPException(status_code=500, detail=f"CSV export failed: {str(e)}")
