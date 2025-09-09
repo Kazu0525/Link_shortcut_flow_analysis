@@ -12,7 +12,6 @@ requires-python = ">=3.8"
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
-    "sqlite3",
     "qrcode[pil]>=7.4.0",
     "python-multipart>=0.0.6"
 ]
