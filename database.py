@@ -1,16 +1,19 @@
 import sqlite3
-from config import DB_PATH
+import config
+import os
 
-def init_db() -> bool:
-    """データベース初期化"""
-    print(f"🔧 Initializing enhanced database at: {DB_PATH}")
-    
+def init_db():
+    """データベースを初期化"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        # データベースファイルが存在しない場合は作成
+        if not os.path.exists(config.DB_PATH):
+            print(f"📂 新しいデータベースを作成: {config.DB_PATH}")
+        
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
         
-        # URLsテーブル（強化版）
-        cursor.execute('''
+        # URLsテーブル作成
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS urls (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 short_code TEXT UNIQUE NOT NULL,
@@ -18,53 +21,53 @@ def init_db() -> bool:
                 custom_name TEXT,
                 campaign_name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE,
-                created_by TEXT DEFAULT 'system'
+                is_active BOOLEAN DEFAULT TRUE
             )
-        ''')
+        """)
         
-        # Clicksテーブル（強化版）
-        cursor.execute('''
+        # Clicksテーブル作成
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS clicks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url_id INTEGER,
+                url_id INTEGER NOT NULL,
                 ip_address TEXT,
-                country TEXT DEFAULT 'Unknown',
-                region TEXT DEFAULT 'Unknown',
-                city TEXT DEFAULT 'Unknown',
-                timezone TEXT DEFAULT 'Unknown',
                 user_agent TEXT,
                 referrer TEXT,
-                device_type TEXT DEFAULT 'unknown',
-                browser TEXT DEFAULT 'unknown',
-                os TEXT DEFAULT 'unknown',
                 source TEXT DEFAULT 'direct',
-                utm_source TEXT,
-                utm_medium TEXT,
-                utm_campaign TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                hour_of_day INTEGER,
-                day_of_week INTEGER,
+                clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (url_id) REFERENCES urls (id)
             )
-        ''')
+        """)
         
-        # インデックス作成（パフォーマンス向上）
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_urls_short_code ON urls(short_code)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_urls_is_active ON urls(is_active)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_clicks_url_id ON clicks(url_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_clicks_created_at ON clicks(created_at)')
+        # インデックス作成
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_short_code ON urls(short_code)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_url_id ON clicks(url_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_clicked_at ON clicks(clicked_at)")
         
         conn.commit()
         conn.close()
+        
+        print("✅ データベース初期化成功")
         return True
         
     except Exception as e:
-        print(f"❌ Database initialization failed: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ データベース初期化失敗: {e}")
         return False
 
-def get_db_connection() -> sqlite3.Connection:
+def get_db_connection():
     """データベース接続を取得"""
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(config.DB_PATH)
+
+def test_connection():
+    """データベース接続テスト"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM urls")
+        result = cursor.fetchone()
+        conn.close()
+        print(f"🔗 データベース接続OK - URL数: {result[0]}")
+        return True
+    except Exception as e:
+        print(f"❌ データベース接続失敗: {e}")
+        return False
