@@ -1,17 +1,15 @@
 services:
   - type: web
-    name: url-shortener
+    name: link-shortcut-flow-analysis
     env: python
-    plan: free
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host=0.0.0.0 --port=$PORT
     envVars:
-      - key: PORT
-        value: 8000
       - key: BASE_URL
-        fromService:
-          name: url-shortener
-          type: web
-          property: url
+        value: https://link-shortcut-flow-analysis.onrender.com
+      - key: DB_PATH
+        value: url_shortener.db
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "False"
