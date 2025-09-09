@@ -59,3 +59,19 @@ class BulkRequest(BaseModel):
     urls: List[BulkItem]
     campaign_name: Optional[str] = None
 
+# models.py の最後に追加
+class BulkResponseItem(BaseModel):
+    original_url: str
+    short_code: str
+    short_url: str
+    qr_code_url: str
+    custom_name: Optional[str] = None
+    success: bool = True
+    error_message: Optional[str] = None
+
+class BulkResponse(BaseModel):
+    results: List[BulkResponseItem]
+    total_count: int
+    success_count: int
+    failed_count: int
+    campaign_name: Optional[str] = None
