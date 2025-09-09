@@ -1,3 +1,4 @@
+# models.py
 from pydantic import BaseModel, HttpUrl, validator
 from typing import Optional, List
 from datetime import datetime
@@ -70,3 +71,4 @@ class ErrorResponse(BaseModel):
     success: bool = False
     error: str
     details: Optional[str] = None
+
