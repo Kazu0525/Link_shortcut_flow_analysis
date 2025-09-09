@@ -4,14 +4,15 @@ from fastapi.responses import HTMLResponse
 from datetime import datetime
 from contextlib import asynccontextmanager
 import config
-# 修正: 正しいインポート方法
+from database import init_db
+
+# 個別にルーターをインポート
 from routes.redirect import router as redirect_router
 from routes.shorten import router as shorten_router
 from routes.analytics import router as analytics_router
 from routes.bulk import router as bulk_router
 from routes.export import router as export_router
 from routes.admin import router as admin_router
-from database import init_db
 
 # ライフスパンハンドラーを使用
 @asynccontextmanager
@@ -51,7 +52,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ルーターの登録 - 順序が重要！
+# ルーターの登録 - 個別のルーターを使用
 app.include_router(redirect_router)
 app.include_router(shorten_router)
 app.include_router(analytics_router)
@@ -85,4 +86,3 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
