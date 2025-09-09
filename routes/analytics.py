@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request  # Requestを確認
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 import sqlite3
 from datetime import datetime, timedelta
@@ -110,7 +110,8 @@ ANALYTICS_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-@router.get("/{short_code}")  # ← 変更なし（パラメータあり）
+# **重要: パス変更 - /analytics/{short_code}にする**
+@router.get("/analytics/{short_code}")  # ← ここを変更
 async def analytics_page(short_code: str):
     """分析画面"""
     try:
@@ -164,6 +165,62 @@ async def analytics_page(short_code: str):
 # 既存のAPIエンドポイントはそのまま保持
 async def get_detailed_analytics(short_code: str) -> Dict[str, Any]:
     """詳細な分析データを取得（API用）"""
-
-    # ... 既存のコード ...
-
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # 基本情報取得
+        cursor.execute('''
+            SELECT id, original_url, created_at, custom_name, campaign_name
+            FROM urls WHERE short_code = ? AND is_active = TRUE
+        ''', (short_code,))
+        
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Short URL not found")
+        
+        url_id, original_url, created_at, custom_name, campaign_name = result
+        
+        # 詳細統計取得
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total_clicks,
+                COUNT(DISTINCT ip_address) as unique_clicks,
+                COUNT(CASE WHEN source = 'qr' THEN 1 END) as qr_clicks,
+                COUNT(CASE WHEN source = 'direct' THEN 1 END) as direct_clicks
+            FROM clicks WHERE url_id = ?
+        ''', (url_id,))
+        
+        stats = cursor.fetchone()
+        total_clicks, unique_clicks, qr_clicks, direct_clicks = stats if stats else (0, 0, 0, 0)
+        
+        # 時系列データ（過去30日）
+        cursor.execute('''
+            SELECT DATE(clicked_at) as date, COUNT(*) as clicks
+            FROM clicks 
+            WHERE url_id = ? AND clicked_at >= datetime('now', '-30 days')
+            GROUP BY DATE(clicked_at)
+            ORDER BY date DESC
+        ''', (url_id,))
+        
+        daily_stats = cursor.fetchall()
+        
+        conn.close()
+        
+        return {
+            "short_code": short_code,
+            "original_url": original_url,
+            "created_at": created_at,
+            "custom_name": custom_name,
+            "campaign_name": campaign_name,
+            "stats": {
+                "total_clicks": total_clicks,
+                "unique_clicks": unique_clicks,
+                "qr_clicks": qr_clicks,
+                "direct_clicks": direct_clicks
+            },
+            "daily_stats": [{"date": date, "clicks": clicks} for date, clicks in daily_stats]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analytics retrieval failed: {str(e)}")
