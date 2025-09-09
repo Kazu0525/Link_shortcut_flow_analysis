@@ -25,7 +25,7 @@ async def shorten_url(request: ShortenRequest):
         # 短縮コード生成（重複チェック付き）
         short_code = await generate_unique_short_code()
         
-        # QRコード生成
+        # QRコード生成（軽量版）
         qr_code_data = generate_qr_code(f"{config.BASE_URL}/{short_code}")
         
         # データベースに保存
