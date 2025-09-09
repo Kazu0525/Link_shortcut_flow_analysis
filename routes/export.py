@@ -7,39 +7,41 @@ import io
 from datetime import datetime
 from typing import List, Optional
 
-# 絶対インポートに変更
+# 絶対インポートに変更（pydantic完全除去）
 import config
-from models import ExportRequest
 from utils import get_db_connection, export_to_csv_format
 
 router = APIRouter()
 
 @router.post("/api/export")
-async def export_data(request: ExportRequest):
-    """データエクスポートAPIエンドポイント"""
+async def export_data(request: dict):
+    """データエクスポートAPIエンドポイント（軽量版）"""
     try:
-        if not request.short_codes:
+        short_codes = request.get("short_codes", [])
+        format_type = request.get("format", "json")
+        
+        if not short_codes:
             raise HTTPException(status_code=400, detail="エクスポートする短縮コードを指定してください")
         
-        if len(request.short_codes) > config.MAX_EXPORT_RECORDS:
+        if len(short_codes) > config.MAX_EXPORT_RECORDS:
             raise HTTPException(status_code=400, detail=f"一度にエクスポートできるのは{config.MAX_EXPORT_RECORDS}件までです")
         
         # データベースからデータを取得
-        export_data = await get_export_data(request.short_codes)
+        export_data_result = await get_export_data(short_codes)
         
-        if not export_data:
+        if not export_data_result:
             raise HTTPException(status_code=404, detail="エクスポート対象のデータが見つかりません")
         
         # フォーマットに応じてデータを変換
-        if request.format.lower() == "json":
+        if format_type.lower() == "json":
             return JSONResponse({
                 "export_date": datetime.now().isoformat(),
-                "total_records": len(export_data),
-                "data": export_data
+                "total_records": len(export_data_result),
+                "data": export_data_result
             })
         
-        elif request.format.lower() == "csv":
-            csv_content = export_to_csv_format(export_data)
+        elif format_type.lower() == "csv":
+            csv_content = export_to_csv_format(export_data_result)
             
             return Response(
                 content=csv_content,
