@@ -4,13 +4,8 @@ from fastapi.responses import HTMLResponse
 from datetime import datetime
 from contextlib import asynccontextmanager
 import config
-# 修正: ルーターのインポート方法を変更
-from routes.redirect import router as redirect_router
-from routes.shorten import router as shorten_router
-from routes.analytics import router as analytics_router
-from routes.bulk import router as bulk_router
-from routes.export import router as export_router
-from routes.admin import router as admin_router
+# 修正: 正しいインポート方法
+from routes import redirect, shorten, analytics, bulk, export, admin
 from database import init_db
 
 # ライフスパンハンドラーを使用
@@ -19,6 +14,7 @@ async def lifespan(app: FastAPI):
     # 起動時処理
     print("🚀 Starting Enhanced Link Tracker API...")
     print(f"🌐 Base URL: {config.BASE_URL}")
+    print(f"🔧 Initializing enhanced database at: {config.DB_PATH}")
     
     success = init_db()
     if success:
@@ -51,12 +47,12 @@ app.add_middleware(
 )
 
 # ルーターの登録 - 順序が重要！
-app.include_router(redirect_router)
-app.include_router(shorten_router)
-app.include_router(analytics_router)
-app.include_router(bulk_router)
-app.include_router(export_router)
-app.include_router(admin_router)
+app.include_router(redirect.router)
+app.include_router(shorten.router)
+app.include_router(analytics.router)
+app.include_router(bulk.router)
+app.include_router(export.router)
+app.include_router(admin.router)
 
 # ルートページ
 @app.get("/")
