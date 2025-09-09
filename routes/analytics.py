@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request  # Requestを確認
 from fastapi.responses import HTMLResponse
 import sqlite3
 from datetime import datetime, timedelta
@@ -164,4 +164,5 @@ async def analytics_page(short_code: str):
 # 既存のAPIエンドポイントはそのまま保持
 async def get_detailed_analytics(short_code: str) -> Dict[str, Any]:
     """詳細な分析データを取得（API用）"""
+
     # ... 既存のコード ...
