@@ -1,3 +1,4 @@
+# models.py
 from pydantic import BaseModel, HttpUrl, validator
 from typing import Optional, List
 from datetime import datetime
@@ -57,3 +58,4 @@ class BulkItem(BaseModel):
 class BulkRequest(BaseModel):
     urls: List[BulkItem]
     campaign_name: Optional[str] = None
+
