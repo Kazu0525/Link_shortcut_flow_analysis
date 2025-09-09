@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from config import DB_PATH, BASE_URL
+from models import AnalyticsResponse, ClickData
+
 
 router = APIRouter()
 
@@ -224,3 +226,4 @@ async def get_detailed_analytics(short_code: str) -> Dict[str, Any]:
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analytics retrieval failed: {str(e)}")
+
