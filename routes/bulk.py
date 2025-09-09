@@ -1,441 +1,356 @@
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
-import sqlite3
+from fastapi import APIRouter, HTTPException, Request, File, UploadFile, Form
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+import json
+import csv
+import io
+from datetime import datetime
 from typing import List, Dict, Any
-from models import BulkGenerationRequest, BulkGenerationItem
-from config import DB_PATH, BASE_URL
-from utils import generate_short_code, generate_qr_code_base64
+import sqlite3
+
+# 絶対インポートに変更
+import config
+from models import BulkRequest, BulkResponse, BulkResponseItem, ShortenRequest
+from utils import get_db_connection, generate_short_code, validate_url, clean_url
+from routes.shorten import generate_qr_code
 
 router = APIRouter()
+templates = Jinja2Templates(directory="templates")
 
-# 一括生成画面HTML - 完全な修正版
-BULK_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>一括リンク生成 - Link Tracker</title>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
-        .form-section { background: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 8px; }
-        .spreadsheet-container { margin: 20px 0; overflow-x: auto; }
-        .spreadsheet-table { width: 100%; border-collapse: collapse; min-width: 1500px; }
-        .spreadsheet-table th, .spreadsheet-table td { border: 1px solid #ddd; padding: 8px; }
-        .spreadsheet-table th { background: #4CAF50; color: white; text-align: center; position: sticky; top: 0; }
-        .spreadsheet-table input, .spreadsheet-table select { width: 100%; border: 1px solid #ccc; padding: 6px; box-sizing: border-box; }
-        .spreadsheet-table input:focus, .spreadsheet-table select:focus { border-color: #2196F3; outline: none; }
-        .required { border-left: 3px solid #f44336; }
-        .row-number { background: #f5f5f5; text-align: center; font-weight: bold; width: 50px; }
-        .quantity-column { width: 80px; text-align: center; }
-        .action-buttons { text-align: center; margin: 20px 0; }
-        .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
-        .btn-primary { background: #4CAF50; color: white; }
-        .btn-secondary { background: #2196F3; color: white; }
-        .btn-danger { background: #f44336; color: white; }
-        .btn-warning { background: #FF9800; color: white; }
-        .results-section { margin: 30px 0; }
-        .result-item { background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #4CAF50; }
-        .error-item { background: #ffebee; border-left: 4px solid #f44336; }
-        .copy-btn { background: #FF9800; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 5px; }
-        .stats-link { color: #1976d2; text-decoration: none; font-weight: bold; }
-        .stats-link:hover { text-decoration: underline; }
-        .loading { text-align: center; padding: 20px; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin: 0 auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .instructions { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 一括リンク生成システム</h1>
-        
-        <div class="instructions">
-            <h3>📝 使い方</h3>
-            <ol>
-                <li><strong>B列（必須）</strong>: 短縮したい元のURLを入力（http:// または https:// で始めてください）</li>
-                <li><strong>C列（任意）</strong>: カスタム短縮コードを入力（空白の場合は自動生成）</li>
-                <li><strong>D列（任意）</strong>: カスタム名を入力（管理画面で識別しやすくします）</li>
-                <li><strong>E列（任意）</strong>: キャンペーン名を入力（同じキャンペーンのURLをグループ化）</li>
-                <li><strong>F列（任意）</strong>: 生成数量を入力（空白の場合は1個生成）</li>
-                <li><strong>「🚀 一括生成開始」</strong>ボタンをクリック</li>
-            </ol>
-        </div>
-
-        <div class="action-buttons">
-            <button class="btn btn-secondary" id="addRowBtn">➕ 1行追加</button>
-            <button class="btn btn-secondary" id="add5RowsBtn">➕ 5行追加</button>
-            <button class="btn btn-secondary" id="add10RowsBtn">➕ 10行追加</button>
-            <button class="btn btn-warning" id="clearAllBtn">🗑️ 全削除</button>
-            <button class="btn btn-danger" id="generateBtn">🚀 一括生成開始</button>
-            <button class="btn btn-primary" onclick="window.location.href='/admin'">📊 管理画面へ</button>
-        </div>
-
-        <div class="spreadsheet-container">
-            <table class="spreadsheet-table" id="spreadsheetTable">
-                <thead>
-                    <tr>
-                        <th class="row-number">A<br>行番号</th>
-                        <th style="width: 40%;">B<br>オリジナルURL ※必須</th>
-                        <th style="width: 12%;">C<br>カスタム短縮コード<br>(任意)</th>
-                        <th style="width: 12%;">D<br>カスタム名<br>(任意)</th>
-                        <th style="width: 12%;">E<br>キャンペーン名<br>(任意)</th>
-                        <th style="width: 8%;" class="quantity-column">F<br>生成数量<br>(任意)</th>
-                        <th style="width: 10%;">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="spreadsheetBody">
-                    <tr>
-                        <td class="row-number">1</td>
-                        <td><input type="url" class="required" placeholder="https://example.com" required /></td>
-                        <td><input type="text" placeholder="例: product01" /></td>
-                        <td><input type="text" placeholder="例: 商品A" /></td>
-                        <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                        <td><input type="number" min="1" max="20" value="1" class="quantity-column" /></td>
-                        <td><button class="delete-row-btn">❌ 削除</button></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="action-buttons">
-            <button class="btn btn-secondary" id="addRowBtn2">➕ 1行追加</button>
-            <button class="btn btn-secondary" id="add5RowsBtn2">➕ 5行追加</button>
-            <button class="btn btn-secondary" id="add10RowsBtn2">➕ 10行追加</button>
-            <button class="btn btn-warning" id="clearAllBtn2">🗑️ 全削除</button>
-            <button class="btn btn-danger" id="generateBtn2">🚀 一括生成開始</button>
-        </div>
-
-        <div class="results-section" id="resultsSection" style="display: none;">
-            <h2>📈 生成結果</h2>
-            <div id="resultsContent"></div>
-        </div>
-    </div>
-
-    <script>
-        let rowCounter = 1;
-        
-        function addRow() {
-            console.log('addRow function called');
-            rowCounter++;
-            const tbody = document.getElementById('spreadsheetBody');
-            const newRow = tbody.insertRow();
-            newRow.innerHTML = `
-                <td class="row-number">${rowCounter}</td>
-                <td><input type="url" class="required" placeholder="https://example.com" required /></td>
-                <td><input type="text" placeholder="例: product${rowCounter}" /></td>
-                <td><input type="text" placeholder="例: 商品${String.fromCharCode(64 + rowCounter)}" /></td>
-                <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                <td><input type="number" min="1" max="20" value="1" class="quantity-column" /></td>
-                <td><button class="delete-row-btn">❌ 削除</button></td>
-            `;
-            updateRowNumbers();
-            attachDeleteHandler(newRow);
-        }
-        
-        function addMultipleRows(count) {
-            console.log('addMultipleRows function called with count:', count);
-            for (let i = 0; i < count; i++) {
-                addRow();
-            }
-        }
-        
-        function removeRow(button) {
-            console.log('removeRow function called');
-            const row = button.closest('tr');
-            if (document.getElementById('spreadsheetBody').rows.length > 1) {
-                row.remove();
-                updateRowNumbers();
-            } else {
-                alert('最低1行は必要です');
-            }
-        }
-        
-        function updateRowNumbers() {
-            const rows = document.querySelectorAll('#spreadsheetBody tr');
-            rows.forEach((row, index) => {
-                row.cells[0].textContent = index + 1;
-            });
-            rowCounter = rows.length;
-        }
-        
-        function clearAll() {
-            console.log('clearAll function called');
-            if (confirm('全てのデータを削除しますか？')) {
-                document.getElementById('spreadsheetBody').innerHTML = `
-                    <tr>
-                        <td class="row-number">1</td>
-                        <td><input type="url" class="required" placeholder="https://example.com" required /></td>
-                        <td><input type="text" placeholder="例: product01" /></td>
-                        <td><input type="text" placeholder="例: 商品A" /></td>
-                        <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                        <td><input type="number" min="1" max="20" value="1" class="quantity-column" /></td>
-                        <td><button class="delete-row-btn">❌ 削除</button></td>
-                    </tr>
-                `;
-                rowCounter = 1;
-                document.getElementById('resultsSection').style.display = 'none';
-                attachDeleteHandler(document.querySelector('#spreadsheetBody tr'));
-            }
-        }
-        
-        function validateAndGenerate() {
-            console.log('validateAndGenerate function called');
-            const rows = document.querySelectorAll('#spreadsheetBody tr');
-            const data = [];
-            let hasError = false;
-            
-            for (let row of rows) {
-                const inputs = row.querySelectorAll('input');
-                const originalUrl = inputs[0].value.trim();
-                const customSlug = inputs[1].value.trim();
-                const customName = inputs[2].value.trim();
-                const campaignName = inputs[3].value.trim();
-                const quantity = parseInt(inputs[4].value) || 1;
-                
-                if (originalUrl) {
-                    if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {
-                        alert('URLは http:// または https:// で始めてください');
-                        inputs[0].focus();
-                        hasError = true;
-                        break;
-                    }
-                    
-                    for (let i = 0; i < quantity; i++) {
-                        let finalCustomSlug = customSlug;
-                        let finalCustomName = customName;
-                        
-                        if (quantity > 1) {
-                            if (customSlug) finalCustomSlug = `${customSlug}_${i+1}`;
-                            if (customName) finalCustomName = `${customName}_${i+1}`;
-                        }
-                        
-                        data.push({
-                            original_url: originalUrl,
-                            custom_slug: finalCustomSlug || null,
-                            custom_name: finalCustomName || null,
-                            campaign_name: campaignName || null
-                        });
-                    }
-                }
-            }
-            
-            if (hasError) return;
-            
-            if (data.length === 0) {
-                alert('少なくとも1つのURLを入力してください');
-                return;
-            }
-            
-            if (data.length > 100) {
-                if (!confirm(`一度に ${data.length} 個のURLを生成します。よろしいですか？`)) {
-                    return;
-                }
-            }
-            
-            generateLinks(data);
-        }
-        
-        async function generateLinks(data) {
-            const btn = document.getElementById('generateBtn');
-            const resultsSection = document.getElementById('resultsSection');
-            const resultsContent = document.getElementById('resultsContent');
-            
-            btn.disabled = true;
-            btn.innerHTML = '⏳ 生成中...';
-            resultsSection.style.display = 'block';
-            resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>リンクを生成しています...</p></div>';
-            
-            try {
-                const response = await fetch('/bulk-generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ items: data })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                displayResults(result);
-                
-            } catch (error) {
-                resultsContent.innerHTML = `<div class="error-item">エラー: ${error.message}</div>`;
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '🚀 一括生成開始';
-            }
-        }
-        
-        function displayResults(result) {
-            const resultsContent = document.getElementById('resultsContent');
-            
-            let html = `
-                <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                    <h3>📊 生成サマリー</h3>
-                    <p>成功: <strong>${result.success_count}</strong> | エラー: <strong>${result.error_count}</strong> | 総生成数: <strong>${result.success_count}</strong></p>
-                </div>
-            `;
-            
-            if (result.results && result.results.length > 0) {
-                html += '<h3>✅ 生成成功</h3>';
-                result.results.forEach((item, index) => {
-                    html += `
-                        <div class="result-item">
-                            <p><strong>${index + 1}. 元URL:</strong> ${item.original_url}</p>
-                            <p><strong>カスタム名:</strong> ${item.custom_name || 'なし'} | <strong>キャンペーン:</strong> ${item.campaign_name || 'なし'}</p>
-                            <p><strong>生成されたリンク:</strong></p>
-                    `;
-                    
-                    item.generated_urls.forEach((url, urlIndex) => {
-                        html += `
-                            <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 5px;">
-                                <strong>${url.short_code}</strong>: 
-                                <a href="${url.short_url}" target="_blank">${url.short_url}</a>
-                                <button class="copy-btn" onclick="copyToClipboard('${url.short_url}')">📋 コピー</button>
-                                <a href="/analytics/${url.short_code}" target="_blank" class="stats-link">📈 分析</a>
-                                <br>
-                                <small>QR: <a href="${url.qr_url}" target="_blank">${url.qr_url}</a></small>
-                            </div>
-                        `;
-                    });
-                    
-                    html += '</div>';
-                });
-            }
-            
-            if (result.errors && result.errors.length > 0) {
-                html += '<h3>❌ エラー</h3>';
-                result.errors.forEach(error => {
-                    html += `<div class="error-item">URL: ${error.original_url} - エラー: ${error.error}</div>`;
-                });
-            }
-            
-            resultsContent.innerHTML = html;
-        }
-        
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('クリップボードにコピーしました: ' + text);
-            });
-        }
-        
-        function attachDeleteHandler(row) {
-            const deleteBtn = row.querySelector('.delete-row-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', function() {
-                    removeRow(this);
-                });
-            }
-        }
-        
-        // イベントリスナーの設定
-        document.addEventListener('DOMContentLoaded', function() {
-            // ボタンにイベントリスナーを追加
-            document.getElementById('addRowBtn').addEventListener('click', addRow);
-            document.getElementById('add5RowsBtn').addEventListener('click', () => addMultipleRows(5));
-            document.getElementById('add10RowsBtn').addEventListener('click', () => addMultipleRows(10));
-            document.getElementById('clearAllBtn').addEventListener('click', clearAll);
-            document.getElementById('generateBtn').addEventListener('click', validateAndGenerate);
-            
-            document.getElementById('addRowBtn2').addEventListener('click', addRow);
-            document.getElementById('add5RowsBtn2').addEventListener('click', () => addMultipleRows(5));
-            document.getElementById('add10RowsBtn2').addEventListener('click', () => addMultipleRows(10));
-            document.getElementById('clearAllBtn2').addEventListener('click', clearAll);
-            document.getElementById('generateBtn2').addEventListener('click', validateAndGenerate);
-            
-            // 初期行の削除ボタンにハンドラーを追加
-            attachDeleteHandler(document.querySelector('#spreadsheetBody tr'));
-            
-            // 初期表示時に4行追加（合計5行）
-            addMultipleRows(4);
-            console.log('ページ読み込み完了');
-        });
-    </script>
-</body>
-</html>
-"""
-
-# **重要: パス変更 - prefixなしにする**
-@router.get("/bulk")  # ← ここを変更（/bulkから/bulkへ）
-async def bulk_generation_page():
-    """一括生成ページ"""
-    return HTMLResponse(content=BULK_HTML)
-
-@router.post("/bulk-generate")  # ← ここも変更
-async def bulk_generate_urls(request: BulkGenerationRequest):
-    """複数URLを一括生成"""
-    results = []
-    errors = []
-    
+@router.get("/bulk", response_class=HTMLResponse)
+async def bulk_page(request: Request):
+    """一括生成ページの表示"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        return templates.TemplateResponse("bulk.html", {
+            "request": request,
+            "base_url": config.BASE_URL
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"一括生成ページの表示でエラーが発生しました: {str(e)}")
+
+@router.post("/api/bulk", response_model=BulkResponse)
+async def bulk_shorten_urls(request: BulkRequest):
+    """一括URL短縮APIエンドポイント"""
+    try:
+        if len(request.urls) > 100:
+            raise HTTPException(status_code=400, detail="一度に処理できるURLは100件までです")
+        
+        results = []
+        success_count = 0
+        failed_count = 0
+        
+        conn = get_db_connection()
         cursor = conn.cursor()
         
-        for item in request.items:
+        try:
+            for item in request.urls:
+                try:
+                    # URL検証
+                    if not validate_url(str(item.url)):
+                        results.append(BulkResponseItem(
+                            original_url=str(item.url),
+                            short_code="",
+                            short_url="",
+                            qr_code_url="",
+                            custom_name=item.custom_name,
+                            success=False,
+                            error_message="無効なURLです"
+                        ))
+                        failed_count += 1
+                        continue
+                    
+                    # 短縮コード生成
+                    short_code = await generate_unique_short_code_bulk(cursor)
+                    
+                    # QRコード生成
+                    qr_code_data = generate_qr_code(f"{config.BASE_URL}/{short_code}")
+                    
+                    # データベースに保存
+                    cursor.execute("""
+                        INSERT INTO urls (short_code, original_url, custom_name, campaign_name, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        short_code,
+                        clean_url(str(item.url)),
+                        item.custom_name,
+                        request.campaign_name,
+                        datetime.now().isoformat()
+                    ))
+                    
+                    results.append(BulkResponseItem(
+                        original_url=str(item.url),
+                        short_code=short_code,
+                        short_url=f"{config.BASE_URL}/{short_code}",
+                        qr_code_url=qr_code_data,
+                        custom_name=item.custom_name,
+                        success=True
+                    ))
+                    success_count += 1
+                    
+                except Exception as item_error:
+                    results.append(BulkResponseItem(
+                        original_url=str(item.url),
+                        short_code="",
+                        short_url="",
+                        qr_code_url="",
+                        custom_name=item.custom_name,
+                        success=False,
+                        error_message=str(item_error)
+                    ))
+                    failed_count += 1
+            
+            conn.commit()
+            
+        finally:
+            conn.close()
+        
+        return BulkResponse(
+            results=results,
+            total_count=len(request.urls),
+            success_count=success_count,
+            failed_count=failed_count,
+            campaign_name=request.campaign_name
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"一括処理でエラーが発生しました: {str(e)}")
+
+@router.post("/api/bulk/upload")
+async def bulk_upload_file(
+    file: UploadFile = File(...),
+    campaign_name: str = Form(None)
+):
+    """ファイルアップロードによる一括処理"""
+    try:
+        # ファイル形式チェック
+        if not file.filename.endswith(('.csv', '.json', '.txt')):
+            raise HTTPException(status_code=400, detail="CSVまたはJSONファイルをアップロードしてください")
+        
+        # ファイル内容を読み取り
+        content = await file.read()
+        content_str = content.decode('utf-8')
+        
+        urls_data = []
+        
+        if file.filename.endswith('.csv'):
+            # CSV処理
+            csv_reader = csv.DictReader(io.StringIO(content_str))
+            for row in csv_reader:
+                url = row.get('url', '').strip()
+                custom_name = row.get('custom_name', '').strip() or None
+                
+                if url:
+                    urls_data.append({
+                        "url": url,
+                        "custom_name": custom_name
+                    })
+        
+        elif file.filename.endswith('.json'):
+            # JSON処理
             try:
-                # カスタムスラッグのチェック
-                short_code = item.custom_slug
-                if short_code:
-                    cursor.execute("SELECT id FROM urls WHERE short_code = ?", (short_code,))
-                    if cursor.fetchone():
-                        raise HTTPException(status_code=400, detail=f"Custom slug '{short_code}' already exists")
-                else:
-                    short_code = generate_short_code(conn=conn)
-                
-                # URLを保存
-                cursor.execute('''
-                    INSERT INTO urls (short_code, original_url, custom_name, campaign_name) 
-                    VALUES (?, ?, ?, ?)
-                ''', (short_code, item.original_url, item.custom_name, item.campaign_name))
-                
-                # 作成時刻取得
-                cursor.execute("SELECT created_at FROM urls WHERE short_code = ?", (short_code,))
-                created_at = cursor.fetchone()[0]
-                
-                # URL生成
-                short_url = f"{BASE_URL}/{short_code}"
-                qr_url = f"{BASE_URL}/{short_code}?source=qr"
-                qr_code_base64 = generate_qr_code_base64(qr_url)
-                
-                results.append({
-                    "original_url": item.original_url,
-                    "custom_slug": item.custom_slug,
-                    "custom_name": item.custom_name,
-                    "campaign_name": item.campaign_name,
-                    "generated_urls": [{
-                        "short_code": short_code,
-                        "short_url": short_url,
-                        "qr_url": qr_url,
-                        "qr_code_base64": qr_code_base64,
-                        "created_at": created_at
-                    }]
-                })
-                
-            except HTTPException as he:
-                errors.append({
-                    "original_url": item.original_url,
-                    "error": he.detail
-                })
-            except Exception as e:
-                errors.append({
-                    "original_url": item.original_url,
-                    "error": str(e)
-                })
+                json_data = json.loads(content_str)
+                if isinstance(json_data, list):
+                    for item in json_data:
+                        if isinstance(item, dict) and 'url' in item:
+                            urls_data.append({
+                                "url": item['url'],
+                                "custom_name": item.get('custom_name')
+                            })
+                        elif isinstance(item, str):
+                            urls_data.append({
+                                "url": item,
+                                "custom_name": None
+                            })
+                elif isinstance(json_data, dict) and 'urls' in json_data:
+                    urls_data = json_data['urls']
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="無効なJSON形式です")
+        
+        elif file.filename.endswith('.txt'):
+            # テキストファイル処理（1行1URL）
+            for line in content_str.strip().split('\n'):
+                url = line.strip()
+                if url:
+                    urls_data.append({
+                        "url": url,
+                        "custom_name": None
+                    })
+        
+        if not urls_data:
+            raise HTTPException(status_code=400, detail="有効なURLが見つかりませんでした")
+        
+        if len(urls_data) > 500:
+            raise HTTPException(status_code=400, detail="一度にアップロードできるURLは500件までです")
+        
+        # BulkRequestオブジェクトを作成
+        bulk_request = BulkRequest(
+            urls=[{"url": item["url"], "custom_name": item["custom_name"]} for item in urls_data],
+            campaign_name=campaign_name
+        )
+        
+        # 一括処理実行
+        result = await bulk_shorten_urls(bulk_request)
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ファイルアップロード処理でエラーが発生しました: {str(e)}")
+
+async def generate_unique_short_code_bulk(cursor, length=6):
+    """バルク処理用の重複しない短縮コードを生成"""
+    import string
+    import random
+    
+    chars = string.ascii_letters + string.digits
+    max_attempts = 50
+    
+    for _ in range(max_attempts):
+        code = ''.join(random.choices(chars, k=length))
+        
+        # データベースで重複チェック
+        cursor.execute("SELECT 1 FROM urls WHERE short_code = ?", (code,))
+        exists = cursor.fetchone()
+        
+        if not exists:
+            return code
+    
+    raise HTTPException(status_code=500, detail="短縮コードの生成に失敗しました")
+
+@router.get("/api/bulk/template")
+async def download_template(format: str = "csv"):
+    """アップロード用テンプレートファイルのダウンロード"""
+    try:
+        if format == "csv":
+            csv_content = "url,custom_name\nhttps://example.com,Example Site\nhttps://google.com,Google Search\n"
+            
+            return JSONResponse({
+                "filename": "bulk_upload_template.csv",
+                "content": csv_content,
+                "content_type": "text/csv"
+            })
+        
+        elif format == "json":
+            json_content = json.dumps({
+                "urls": [
+                    {"url": "https://example.com", "custom_name": "Example Site"},
+                    {"url": "https://google.com", "custom_name": "Google Search"}
+                ]
+            }, indent=2)
+            
+            return JSONResponse({
+                "filename": "bulk_upload_template.json",
+                "content": json_content,
+                "content_type": "application/json"
+            })
+        
+        else:
+            raise HTTPException(status_code=400, detail="サポートされていない形式です")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"テンプレート生成でエラーが発生しました: {str(e)}")
+
+@router.get("/api/bulk/campaigns")
+async def get_campaigns():
+    """既存のキャンペーン一覧を取得"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                campaign_name,
+                COUNT(*) as url_count,
+                SUM(
+                    (SELECT COUNT(*) FROM clicks WHERE url_id = urls.id)
+                ) as total_clicks
+            FROM urls 
+            WHERE campaign_name IS NOT NULL AND campaign_name != ''
+            GROUP BY campaign_name
+            ORDER BY url_count DESC
+        """)
+        
+        campaigns = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return JSONResponse({
+            "campaigns": campaigns
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"キャンペーン一覧の取得でエラーが発生しました: {str(e)}")
+
+@router.get("/api/bulk/campaign/{campaign_name}")
+async def get_campaign_urls(campaign_name: str):
+    """指定したキャンペーンのURL一覧を取得"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                u.short_code,
+                u.original_url,
+                u.custom_name,
+                u.created_at,
+                COUNT(c.id) as clicks,
+                COUNT(DISTINCT c.ip_address) as unique_visitors
+            FROM urls u
+            LEFT JOIN clicks c ON u.id = c.url_id
+            WHERE u.campaign_name = ? AND u.is_active = 1
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        """, (campaign_name,))
+        
+        urls = [dict(row) for row in cursor.fetchall()]
+        
+        # キャンペーン全体の統計
+        cursor.execute("""
+            SELECT 
+                COUNT(DISTINCT u.id) as total_urls,
+                COUNT(c.id) as total_clicks,
+                COUNT(DISTINCT c.ip_address) as unique_visitors
+            FROM urls u
+            LEFT JOIN clicks c ON u.id = c.url_id
+            WHERE u.campaign_name = ? AND u.is_active = 1
+        """, (campaign_name,))
+        
+        campaign_stats = dict(cursor.fetchone())
+        conn.close()
+        
+        return JSONResponse({
+            "campaign_name": campaign_name,
+            "stats": campaign_stats,
+            "urls": urls
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"キャンペーンURL一覧の取得でエラーが発生しました: {str(e)}")
+
+@router.delete("/api/bulk/campaign/{campaign_name}")
+async def delete_campaign(campaign_name: str):
+    """キャンペーン全体を削除（論理削除）"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # キャンペーンのURLを無効化
+        cursor.execute("""
+            UPDATE urls 
+            SET is_active = 0
+            WHERE campaign_name = ?
+        """, (campaign_name,))
+        
+        deleted_count = cursor.rowcount
         
         conn.commit()
         conn.close()
         
-        return {
-            "success_count": len(results),
-            "error_count": len(errors),
-            "results": results,
-            "errors": errors
-        }
+        return JSONResponse({
+            "message": f"キャンペーン '{campaign_name}' のURL {deleted_count}件を削除しました",
+            "deleted_count": deleted_count
+        })
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Bulk generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"キャンペーン削除でエラーが発生しました: {str(e)}")
