@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析データ - {{ short_code }} - LinkTrack Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .url-info {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .nav-link {
+            color: #333;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 1.1em;
+            color: #666;
+        }
+        
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f1f2f6;
+        }
+        
+        .chart-container {
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .source-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .source-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .source-item:last-child {
+            border-bottom: none;
+        }
+        
+        .source-name {
+            font-weight: 600;
+        }
+        
+        .source-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        
+        .recent-clicks {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .click-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+        }
+        
+        .click-item:last-child {
+            border-bottom: none;
+        }
+        
+        .click-time {
+            color: #666;
+            font-size: 0.8em;
+        }
+        
+        .click-source {
+            background: #f8f9fa;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            color: #555;
+        }
+        
+        .url-code {
+            font-family: 'Courier New', monospace;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        
+        .qr-section {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .qr-code {
+            max-width: 150px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-outline {
+            background: none;
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+        
+        .copy-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        @media (max-width: 1024px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .navigation {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 分析データ</h1>
+            <div class="url-info">
+                <h3>短縮コード: <span class="url-code">{{ short_code }}</span></h3>
+                <p><strong>元のURL:</strong> {{ url_info.original_url }}</p>
+                {% if url_info.custom_name %}
+                <p><strong>カスタム名:</strong> {{ url_info.custom_name }}</p>
+                {% endif %}
+                {% if url_info.campaign_name %}
+                <p><strong>キャンペーン:</strong> {{ url_info.campaign_name }}</p>
+                {% endif %}
+                <p><strong>作成日:</strong> {{ url_info.created_at }}</p>
+                
+                <div style="margin-top: 15px;">
+                    <span>短縮URL: </span>
+                    <strong>{{ base_url }}/{{ short_code }}</strong>
+                    <button class="copy-button" onclick="copyToClipboard('{{ base_url }}/{{ short_code }}')">📋 コピー</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="navigation">
+            <a href="/" class="nav-link">🏠 ホーム</a>
+            <a href="/admin" class="nav-link">📊 管理ダッシュボード</a>
+            <a href="/bulk" class="nav-link">📦 一括生成</a>
+        </div>
+        
+        <!-- 統計サマリー -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ analytics.total_clicks }}</div>
+                <div class="stat-label">👆 総クリック数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ analytics.unique_visitors }}</div>
+                <div class="stat-label">👥 ユニーク訪問者</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ analytics.qr_clicks }}</div>
+                <div class="stat-label">📱 QRクリック数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">
+                    {% if analytics.total_clicks > 0 %}
+                    {{ "%.1f"|format((analytics.unique_visitors / analytics.total_clicks * 100)) }}%
+                    {% else %}
+                    0%
+                    {% endif %}
+                </div>
+                <div class="stat-label">📊 ユニーク率</div>
+            </div>
+        </div>
+        
+        <div class="analytics-grid">
+            <!-- チャートエリア -->
+            <div class="card">
+                <h2>📈 クリック推移</h2>
+                <div class="chart-container">
+                    <p>📊 チャート機能は実装予定です</p>
+                    <p>過去7日間のクリック数推移を表示します</p>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-outline" onclick="exportAnalytics()">💾 分析データをエクスポート</button>
+                </div>
+            </div>
+            
+            <!-- サイドバー -->
+            <div>
+                <!-- トラフィック元 -->
+                <div class="card">
+                    <h2>🚦 トラフィック元</h2>
+                    <div class="source-list">
+                        {% if analytics.source_stats %}
+                        {% for source in analytics.source_stats %}
+                        <div class="source-item">
+                            <span class="source-name">
+                                {% if source.source == 'direct' %}🔗 直接アクセス
+                                {% elif source.source == 'twitter' %}🐦 Twitter
+                                {% elif source.source == 'facebook' %}👥 Facebook
+                                {% elif source.source == 'qr_code' %}📱 QRコード
+                                {% else %}🌐 {{ source.source }}
+                                {% endif %}
+                            </span>
+                            <span class="source-count">{{ source.count }}</span>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="empty-state">
+                            <p>📭 まだクリックがありません</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- QRコード -->
+                <div class="card">
+                    <h2>📱 QRコード</h2>
+                    <div class="qr-section">
+                        <p>このURLのQRコード:</p>
+                        <div id="qrCodeContainer">
+                            <p>🔄 QRコードを生成中...</p>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button class="btn btn-outline" onclick="downloadQR()">💾 QRコード保存</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 最近のクリック -->
+        <div class="card">
+            <h2>🕒 最近のクリック履歴</h2>
+            <div class="recent-clicks">
+                {% if analytics.recent_clicks %}
+                {% for click in analytics.recent_clicks %}
+                <div class="click-item">
+                    <div>
+                        <strong>{{ click.ip_address }}</strong>
+                        <span class="click-source">{{ click.source }}</span>
+                    </div>
+                    <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                        {% if click.referrer %}
+                        参照元: {{ click.referrer }}
+                        {% endif %}
+                    </div>
+                    <div class="click-time">{{ click.clicked_at }}</div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <p>📭 まだクリック履歴がありません</p>
+                    <p>URLが使用されると、ここにクリック情報が表示されます</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // QRコード生成
+        window.addEventListener('load', function() {
+            generateQRCode();
+        });
+        
+        async function generateQRCode() {
+            try {
+                const response = await fetch(`/api/analytics/{{ short_code }}`);
+                const data = await response.json();
+                
+                if (data && data.click_data) {
+                    // QRコードは短縮URL生成時に作成済みなので、ここでは表示のみ
+                    document.getElementById('qrCodeContainer').innerHTML = `
+                        <p>QRコードでアクセス:</p>
+                        <div style="background: white; padding: 10px; border-radius: 10px; display: inline-block;">
+                            <div style="width: 150px; height: 150px; background: #f0f0f0; border-radius: 5px; display: flex; align-items: center; justify-content: center;">
+                                📱 QRコード<br>{{ base_url }}/qr/{{ short_code }}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('qrCodeContainer').innerHTML = '<p>❌ QRコードの生成に失敗しました</p>';
+            }
+        }
+        
+        // データエクスポート
+        function exportAnalytics() {
+            window.open(`/api/export/analytics/{{ short_code }}?format=csv`, '_blank');
+        }
+        
+        // QRコードダウンロード
+        function downloadQR() {
+            alert('QRコードのダウンロード機能は実装予定です');
+        }
+        
+        // クリップボードにコピー
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('📋 クリップボードにコピーしました！');
+            }).catch(function() {
+                // フォールバック
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('📋 クリップボードにコピーしました！');
+            });
+        }
+        
+        // リアルタイム更新（30秒ごと）
+        setInterval(function() {
+            fetch(`/api/analytics/{{ short_code }}/summary`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.summary) {
+                        // 統計数値を更新
+                        const statNumbers = document.querySelectorAll('.stat-number');
+                        if (statNumbers.length >= 4) {
+                            statNumbers[0].textContent = data.summary.total_clicks;
+                            statNumbers[1].textContent = data.summary.unique_visitors;
+                            statNumbers[2].textContent = data.summary.qr_clicks;
+                            statNumbers[3].textContent = data.summary.conversion_rate + '%';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.log('統計更新エラー:', error);
+                });
+        }, 30000);
+    </script>
+</body>
+</html>
