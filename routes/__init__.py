@@ -1,3 +1,4 @@
+# __init__.py
 from .redirect import router as redirect_router
 from .shorten import router as shorten_router
 from .analytics import router as analytics_router
@@ -12,4 +13,5 @@ __all__ = [
     'bulk_router',
     'export_router',
     'admin_router'
+
 ]
