@@ -186,10 +186,10 @@ INDEX_HTML = """
                 if (response.ok) {
                     showResult(result, 'success');
                 } else {
-                    showResult({{error: result.detail || '処理に失敗しました'}}, 'error');
+                    showResult({error: result.detail || '処理に失敗しました'}, 'error');
                 }
             } catch (error) {
-                showResult({{error: 'ネットワークエラーが発生しました'}}, 'error');
+                showResult({error: 'ネットワークエラーが発生しました'}, 'error');
             } finally {
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
@@ -200,7 +200,7 @@ INDEX_HTML = """
             const section = document.getElementById('resultSection');
             const content = document.getElementById('resultContent');
             
-            section.className = `result-section result-${{type}}`;
+            section.className = `result-section result-${type}`;
             section.style.display = 'block';
             
             if (type === 'success') {
@@ -208,25 +208,25 @@ INDEX_HTML = """
                     <h3>✅ 短縮URL生成完了</h3>
                     <div style="margin: 15px 0;">
                         <strong>短縮URL:</strong> 
-                        <span id="shortUrl">${{data.short_url}}</span>
-                        <button class="copy-button" onclick="copyToClipboard('${{data.short_url}}')">📋 コピー</button>
+                        <span id="shortUrl">${data.short_url}</span>
+                        <button class="copy-button" onclick="copyToClipboard('${data.short_url}')">📋 コピー</button>
                     </div>
                     <div style="margin: 15px 0;">
-                        <strong>元のURL:</strong> ${{data.original_url}}
+                        <strong>元のURL:</strong> ${data.original_url}
                     </div>
-                    ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
-                    ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
+                    ${data.custom_name ? `<div><strong>カスタム名:</strong> ${data.custom_name}</div>` : ''}
+                    ${data.campaign_name ? `<div><strong>キャンペーン:</strong> ${data.campaign_name}</div>` : ''}
                     <div style="margin-top: 20px;">
-                        <a href="/analytics/${{data.short_code}}" class="btn">📈 分析ページ</a>
+                        <a href="/analytics/${data.short_code}" class="btn">📈 分析ページ</a>
                     </div>
                 `;
             } else {
                 content.innerHTML = `
                     <h3>❌ エラーが発生しました</h3>
-                    <p>${{data.error}}</p>
+                    <p>${data.error}</p>
                 `;
             }
-            section.scrollIntoView({{ behavior: 'smooth' }});
+            section.scrollIntoView({ behavior: 'smooth' });
         }
         
         function copyToClipboard(text) {
@@ -252,7 +252,8 @@ INDEX_HTML = """
 </html>
 """
 
-@router.get("/", response_class=HTMLResponse)
+# ★★★ 重要: @router.get を @app.get に変更 ★★★
+@app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """メインページ（インライン版）"""
     try:
@@ -294,7 +295,8 @@ async def root(request: Request):
         )
         return HTMLResponse(content=html_content)
 
-@router.get("/health")
+# ★★★ 重要: @router.get を @app.get に変更 ★★★
+@app.get("/health")
 async def health_check():
     """ヘルスチェックエンドポイント"""
     try:
@@ -317,7 +319,8 @@ async def health_check():
             "error": str(e)
         }, status_code=500)
 
-@router.get("/api/info")
+# ★★★ 重要: @router.get を @app.get に変更 ★★★
+@app.get("/api/info")
 async def api_info():
     """API情報エンドポイント"""
     return JSONResponse({
@@ -343,4 +346,3 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
-
