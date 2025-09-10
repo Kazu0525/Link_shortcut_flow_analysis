@@ -388,7 +388,7 @@ def get_admin_html(total_urls, total_clicks, unique_clicks, table_rows):
 </html>
 """
 
-# 一括生成HTML（CSS波括弧を二重に修正）
+# 一括生成HTML（CSS波括弧を二重に修正 + E列生成数追加）
 def get_bulk_html():
     return """
 <!DOCTYPE html>
@@ -498,15 +498,16 @@ def get_bulk_html():
         }
         
         .row-number { 
-            width: 60px; 
+            width: 50px; 
             text-align: center; 
             font-weight: bold;
             background: #f8f9fa !important;
             color: #495057;
         }
-        .url-column { width: 45%; }
+        .url-column { width: 35%; }
         .custom-name-column { width: 15%; }
         .campaign-column { width: 15%; }
+        .quantity-column { width: 10%; text-align: center; }
         .action-column { width: 15%; text-align: center; }
         
         .spreadsheet-table input { 
@@ -524,6 +525,10 @@ def get_bulk_html():
         }
         .url-input {
             font-family: monospace;
+        }
+        .quantity-input {
+            text-align: center;
+            font-weight: 600;
         }
         .required { 
             border-left: 4px solid #dc3545 !important; 
@@ -611,8 +616,12 @@ def get_bulk_html():
                     <li><strong>B列（オリジナルURL）</strong>: 短縮したい元のURLを入力してください（http:// または https:// で始めること）</li>
                     <li><strong>C列（カスタム名）</strong>: 管理しやすい名前を入力してください</li>
                     <li><strong>D列（キャンペーン名）</strong>: マーケティングキャンペーンのグループ名を入力</li>
+                    <li><strong>E列（生成数）</strong>: 同じURLから何個の短縮リンクを作るかを入力（1〜10個）</li>
                     <li><strong>「🚀 一括生成開始」</strong>ボタンをクリックして処理を実行</li>
                 </ol>
+                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+                    <strong>💡 生成数の使い方:</strong> 例えば「商品A」で生成数3を設定すると、「商品A_1」「商品A_2」「商品A_3」として3つの短縮リンクが生成されます。
+                </div>
             </div>
 
             <div class="action-buttons">
@@ -631,6 +640,7 @@ def get_bulk_html():
                             <th class="url-column">B<br>オリジナルURL ※必須</th>
                             <th class="custom-name-column">C<br>カスタム名<br>（任意）</th>
                             <th class="campaign-column">D<br>キャンペーン名<br>（任意）</th>
+                            <th class="quantity-column">E<br>生成数<br>（1〜10）</th>
                             <th class="action-column">操作</th>
                         </tr>
                     </thead>
@@ -640,6 +650,7 @@ def get_bulk_html():
                             <td><input type="url" class="required url-input" placeholder="https://example.com" required /></td>
                             <td><input type="text" placeholder="商品A" /></td>
                             <td><input type="text" placeholder="春キャンペーン" /></td>
+                            <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
                             <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
                         </tr>
                     </tbody>
@@ -665,6 +676,7 @@ def get_bulk_html():
                 <td><input type="url" class="required url-input" placeholder="https://example${rowCounter}.com" required /></td>
                 <td><input type="text" placeholder="商品${String.fromCharCode(64 + rowCounter)}" /></td>
                 <td><input type="text" placeholder="キャンペーン${rowCounter}" /></td>
+                <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
                 <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
             `;
             updateRowNumbers();
@@ -702,6 +714,7 @@ def get_bulk_html():
                         <td><input type="url" class="required url-input" placeholder="https://example.com" required /></td>
                         <td><input type="text" placeholder="商品A" /></td>
                         <td><input type="text" placeholder="春キャンペーン" /></td>
+                        <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
                         <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
                     </tr>
                 `;
@@ -712,14 +725,16 @@ def get_bulk_html():
         
         async function validateAndGenerate() {
             const rows = document.querySelectorAll('#spreadsheetBody tr');
-            const data = [];
+            const expandedData = [];
             let hasError = false;
+            let totalToGenerate = 0;
             
             for (let row of rows) {
                 const inputs = row.querySelectorAll('input');
                 const originalUrl = inputs[0].value.trim();
                 const customName = inputs[1].value.trim();
                 const campaignName = inputs[2].value.trim();
+                const quantity = parseInt(inputs[3].value) || 1;
                 
                 if (originalUrl) {
                     if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {
@@ -729,22 +744,48 @@ def get_bulk_html():
                         break;
                     }
                     
-                    data.push({
-                        url: originalUrl,
-                        custom_name: customName || null,
-                        campaign_name: campaignName || null
-                    });
+                    if (quantity < 1 || quantity > 10) {
+                        alert('生成数は1〜10の範囲で入力してください');
+                        inputs[3].focus();
+                        hasError = true;
+                        break;
+                    }
+                    
+                    totalToGenerate += quantity;
+                    
+                    // 指定された数量分だけURLを複製
+                    for (let i = 1; i <= quantity; i++) {
+                        let finalCustomName = customName;
+                        if (quantity > 1 && customName) {
+                            finalCustomName = `${customName}_${i}`;
+                        }
+                        
+                        expandedData.push({
+                            url: originalUrl,
+                            custom_name: finalCustomName || null,
+                            campaign_name: campaignName || null,
+                            originalCustomName: customName,
+                            index: i,
+                            total: quantity
+                        });
+                    }
                 }
             }
             
             if (hasError) return;
             
-            if (data.length === 0) {
+            if (expandedData.length === 0) {
                 alert('少なくとも1つのURLを入力してください');
                 return;
             }
             
-            generateLinks(data);
+            if (totalToGenerate > 50) {
+                if (!confirm(`合計${totalToGenerate}個の短縮リンクを生成します。よろしいですか？`)) {
+                    return;
+                }
+            }
+            
+            generateLinks(expandedData);
         }
         
         async function generateLinks(data) {
@@ -773,6 +814,18 @@ def get_bulk_html():
                 }
                 
                 const result = await response.json();
+                
+                // 結果にカスタム名情報を追加
+                if (result.results) {
+                    result.results.forEach((item, index) => {
+                        if (data[index]) {
+                            item.customName = data[index].originalCustomName;
+                            item.index = data[index].index;
+                            item.total = data[index].total;
+                        }
+                    });
+                }
+                
                 displayResults(result);
                 
             } catch (error) {
@@ -805,17 +858,35 @@ def get_bulk_html():
             
             if (result.results && result.results.length > 0) {
                 html += '<h3 style="color: #28a745; margin-bottom: 20px;">✅ 生成成功</h3>';
+                
+                // グループ化して表示
+                let currentGroup = null;
+                let groupIndex = 1;
+                
                 result.results.forEach((item, index) => {
                     if (item.success) {
+                        const displayName = item.customName || `URL${groupIndex}`;
+                        const isNewGroup = currentGroup !== item.url;
+                        
+                        if (isNewGroup) {
+                            currentGroup = item.url;
+                            if (index > 0) html += '<hr style="margin: 20px 0; border: 1px solid #e0e0e0;">';
+                        }
+                        
+                        const title = item.total > 1 ? `${displayName} (${item.index}/${item.total})` : displayName;
+                        
                         html += `
                             <div class="result-item">
-                                <p><strong>${index + 1}. 元URL:</strong> <a href="${item.url}" target="_blank">${item.url}</a></p>
+                                <p><strong>${title}</strong></p>
+                                <p><strong>元URL:</strong> <a href="${item.url}" target="_blank">${item.url}</a></p>
                                 <p><strong>短縮URL:</strong> 
                                     <a href="${item.short_url}" target="_blank" style="color: #1976d2; font-weight: bold;">${item.short_url}</a>
                                     <button class="copy-btn" onclick="copyToClipboard('${item.short_url}')">📋 コピー</button>
                                 </p>
                             </div>
                         `;
+                        
+                        if (isNewGroup) groupIndex++;
                     }
                 });
                 
