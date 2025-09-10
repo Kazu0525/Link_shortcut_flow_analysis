@@ -668,7 +668,7 @@ def get_analytics_html(short_code, url_data, analytics_data):
 </html>
 """
 
-# 一括生成HTML（シンプル版）
+# 一括生成HTML（生成数機能復活版）
 def get_bulk_html():
     return """
 <!DOCTYPE html>
@@ -712,6 +712,7 @@ def get_bulk_html():
             padding: 25px; 
             border-radius: 10px; 
             margin-bottom: 30px;
+            border-left: 5px solid #28a745;
         }
         .action-buttons { 
             text-align: center; 
@@ -756,12 +757,26 @@ def get_bulk_html():
             padding: 8px;
             vertical-align: middle;
         }
+        .spreadsheet-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        .spreadsheet-table tr:hover {
+            background: #e8f5e9;
+        }
         .spreadsheet-table input { 
             width: 100%; 
             border: 2px solid #e9ecef; 
             padding: 8px 10px; 
             border-radius: 6px;
             font-size: 13px;
+        }
+        .spreadsheet-table input:focus { 
+            border-color: #28a745; 
+            outline: none; 
+        }
+        .quantity-input {
+            text-align: center;
+            font-weight: 600;
         }
         .delete-row-btn { 
             background: #dc3545;
@@ -777,6 +792,44 @@ def get_bulk_html():
             border-top: 3px solid #28a745;
             padding-top: 30px;
         }
+        .result-item { 
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            padding: 20px; 
+            margin: 15px 0; 
+            border-radius: 10px; 
+            border-left: 5px solid #28a745;
+        }
+        .error-item { 
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border-left: 5px solid #dc3545; 
+        }
+        .copy-btn { 
+            background: #fd7e14;
+            color: white; 
+            border: none; 
+            padding: 6px 12px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin-left: 10px;
+            font-weight: 600;
+        }
+        .loading { 
+            text-align: center; 
+            padding: 30px; 
+        }
+        .spinner { 
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #28a745; 
+            border-radius: 50%; 
+            width: 50px; 
+            height: 50px; 
+            animation: spin 1s linear infinite; 
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
     </style>
 </head>
 <body>
@@ -790,10 +843,15 @@ def get_bulk_html():
             <div class="instructions">
                 <h3>📋 操作ガイド</h3>
                 <ol>
-                    <li><strong>URL入力:</strong> 短縮したい元のURLを入力（http:// または https:// で始めること）</li>
-                    <li><strong>カスタム名:</strong> 管理しやすい名前を入力（任意）</li>
-                    <li><strong>一括生成:</strong> 複数行入力して「一括生成開始」をクリック</li>
+                    <li><strong>B列（オリジナルURL）</strong>: 短縮したい元のURLを入力してください（http:// または https:// で始めること）</li>
+                    <li><strong>C列（カスタム名）</strong>: 管理しやすい名前を入力してください</li>
+                    <li><strong>D列（キャンペーン名）</strong>: マーケティングキャンペーンのグループ名を入力</li>
+                    <li><strong>E列（生成数）</strong>: 同じURLから何個の短縮リンクを作るかを入力（1〜10個）</li>
+                    <li><strong>「🚀 一括生成開始」</strong>ボタンをクリックして処理を実行</li>
                 </ol>
+                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+                    <strong>💡 生成数の使い方:</strong> 例えば「商品A」で生成数3を設定すると、「商品A_1」「商品A_2」「商品A_3」として3つの短縮リンクが生成されます。
+                </div>
             </div>
 
             <div class="action-buttons">
@@ -808,9 +866,11 @@ def get_bulk_html():
                 <table class="spreadsheet-table" id="spreadsheetTable">
                     <thead>
                         <tr>
-                            <th style="width: 50px;">行</th>
-                            <th style="width: 50%;">URL ※必須</th>
-                            <th style="width: 25%;">カスタム名</th>
+                            <th style="width: 50px;">A<br>行番号</th>
+                            <th style="width: 35%;">B<br>オリジナルURL ※必須</th>
+                            <th style="width: 15%;">C<br>カスタム名<br>（任意）</th>
+                            <th style="width: 15%;">D<br>キャンペーン名<br>（任意）</th>
+                            <th style="width: 10%;">E<br>生成数<br>（1〜10）</th>
                             <th style="width: 15%;">操作</th>
                         </tr>
                     </thead>
@@ -819,7 +879,9 @@ def get_bulk_html():
                             <td>1</td>
                             <td><input type="url" placeholder="https://example.com" required /></td>
                             <td><input type="text" placeholder="商品A" /></td>
-                            <td><button class="delete-row-btn" onclick="deleteRow(this)">削除</button></td>
+                            <td><input type="text" placeholder="春キャンペーン" /></td>
+                            <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
+                            <td><button class="delete-row-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -843,7 +905,9 @@ def get_bulk_html():
                 <td>${rowCount}</td>
                 <td><input type="url" placeholder="https://example${rowCount}.com" required /></td>
                 <td><input type="text" placeholder="商品${String.fromCharCode(64 + rowCount)}" /></td>
-                <td><button class="delete-row-btn" onclick="deleteRow(this)">削除</button></td>
+                <td><input type="text" placeholder="キャンペーン${rowCount}" /></td>
+                <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
+                <td><button class="delete-row-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
             `;
         }
         
@@ -877,7 +941,9 @@ def get_bulk_html():
                         <td>1</td>
                         <td><input type="url" placeholder="https://example.com" required /></td>
                         <td><input type="text" placeholder="商品A" /></td>
-                        <td><button class="delete-row-btn" onclick="deleteRow(this)">削除</button></td>
+                        <td><input type="text" placeholder="春キャンペーン" /></td>
+                        <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
+                        <td><button class="delete-row-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
                     </tr>
                 `;
                 rowCount = 1;
@@ -887,67 +953,178 @@ def get_bulk_html():
         
         async function generateLinks() {
             const rows = document.querySelectorAll('#spreadsheetBody tr');
-            const urls = [];
+            const expandedData = [];
+            let hasError = false;
+            let totalToGenerate = 0;
             
             for (let row of rows) {
                 const inputs = row.querySelectorAll('input');
-                const url = inputs[0].value.trim();
+                const originalUrl = inputs[0].value.trim();
+                const customName = inputs[1].value.trim();
+                const campaignName = inputs[2].value.trim();
+                const quantity = parseInt(inputs[3].value) || 1;
                 
-                if (url) {
-                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                if (originalUrl) {
+                    if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {
                         alert('URLは http:// または https:// で始めてください');
-                        return;
+                        inputs[0].focus();
+                        hasError = true;
+                        break;
                     }
-                    urls.push(url);
+                    
+                    if (quantity < 1 || quantity > 10) {
+                        alert('生成数は1〜10の範囲で入力してください');
+                        inputs[3].focus();
+                        hasError = true;
+                        break;
+                    }
+                    
+                    totalToGenerate += quantity;
+                    
+                    // 指定された数量分だけURLを複製
+                    for (let i = 1; i <= quantity; i++) {
+                        let finalCustomName = customName;
+                        if (quantity > 1 && customName) {
+                            finalCustomName = `${customName}_${i}`;
+                        }
+                        
+                        expandedData.push({
+                            url: originalUrl,
+                            custom_name: finalCustomName || null,
+                            campaign_name: campaignName || null,
+                            originalCustomName: customName,
+                            index: i,
+                            total: quantity
+                        });
+                    }
                 }
             }
             
-            if (urls.length === 0) {
+            if (hasError) return;
+            
+            if (expandedData.length === 0) {
                 alert('少なくとも1つのURLを入力してください');
                 return;
             }
             
+            if (totalToGenerate > 50) {
+                if (!confirm(`合計${totalToGenerate}個の短縮リンク・QRコードを生成します。よろしいですか？`)) {
+                    return;
+                }
+            }
+            
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            resultsSection.style.display = 'block';
+            resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>短縮リンク・QRコードを生成しています...</p></div>';
+            
             try {
                 const formData = new FormData();
-                formData.append('urls', urls.join('\\n'));
+                const urlList = expandedData.map(item => item.url).join('\\n');
+                formData.append('urls', urlList);
                 
                 const response = await fetch('/api/bulk-process', {
                     method: 'POST',
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const result = await response.json();
+                
+                // 結果にカスタム名情報を追加
+                if (result.results) {
+                    result.results.forEach((item, index) => {
+                        if (expandedData[index]) {
+                            item.customName = expandedData[index].originalCustomName;
+                            item.index = expandedData[index].index;
+                            item.total = expandedData[index].total;
+                        }
+                    });
+                }
+                
                 displayResults(result);
                 
             } catch (error) {
-                alert('エラー: ' + error.message);
+                resultsContent.innerHTML = `<div class="error-item">エラー: ${error.message}</div>`;
             }
         }
         
         function displayResults(result) {
-            const resultsSection = document.getElementById('resultsSection');
             const resultsContent = document.getElementById('resultsContent');
             
-            resultsSection.style.display = 'block';
-            
-            let html = '<h3>生成完了</h3>';
+            let successCount = 0;
+            let errorCount = 0;
             
             if (result.results) {
-                result.results.forEach((item, index) => {
-                    if (item.success) {
-                        html += `
-                            <div style="background: #d4edda; padding: 15px; margin: 10px 0; border-radius: 5px;">
-                                <p><strong>元URL:</strong> ${item.url}</p>
-                                <p><strong>短縮URL:</strong> <a href="${item.short_url}" target="_blank">${item.short_url}</a></p>
-                            </div>
-                        `;
-                    } else {
-                        html += `<div style="background: #f8d7da; padding: 15px; margin: 10px 0; border-radius: 5px;">エラー: ${item.url} - ${item.error}</div>`;
-                    }
+                result.results.forEach(item => {
+                    if (item.success) successCount++;
+                    else errorCount++;
                 });
             }
             
+            let html = `
+                <div style="background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%); padding: 20px; border-radius: 10px; margin-bottom: 25px; border-left: 5px solid #1976d2;">
+                    <h3>📊 生成サマリー</h3>
+                    <p style="font-size: 1.1em; margin-top: 10px;">成功: <strong style="color: #28a745;">${successCount}</strong> | エラー: <strong style="color: #dc3545;">${errorCount}</strong> | 総生成数: <strong>${successCount + errorCount}</strong></p>
+                    <p style="color: #666; margin-top: 5px;">※各短縮URLにQRコードも生成されています。管理画面で確認できます。</p>
+                </div>
+            `;
+            
+            if (result.results && result.results.length > 0) {
+                html += '<h3 style="color: #28a745; margin-bottom: 20px;">✅ 生成成功</h3>';
+                
+                // グループ化して表示
+                let currentGroup = null;
+                let groupIndex = 1;
+                
+                result.results.forEach((item, index) => {
+                    if (item.success) {
+                        const displayName = item.customName || `URL${groupIndex}`;
+                        const isNewGroup = currentGroup !== item.url;
+                        
+                        if (isNewGroup) {
+                            currentGroup = item.url;
+                            if (index > 0) html += '<hr style="margin: 20px 0; border: 1px solid #e0e0e0;">';
+                        }
+                        
+                        const title = item.total > 1 ? `${displayName} (${item.index}/${item.total})` : displayName;
+                        
+                        html += `
+                            <div class="result-item">
+                                <p><strong>${title}</strong></p>
+                                <p><strong>元URL:</strong> <a href="${item.url}" target="_blank">${item.url}</a></p>
+                                <p><strong>短縮URL:</strong> 
+                                    <a href="${item.short_url}" target="_blank" style="color: #1976d2; font-weight: bold;">${item.short_url}</a>
+                                    <button class="copy-btn" onclick="copyToClipboard('${item.short_url}')">📋 コピー</button>
+                                    <button class="copy-btn" onclick="window.open('/qr/${item.short_url.split('/').pop()}', '_blank')" style="background: #FF9800;">📱 QR表示</button>
+                                </p>
+                            </div>
+                        `;
+                        
+                        if (isNewGroup) groupIndex++;
+                    }
+                });
+                
+                const errors = result.results.filter(item => !item.success);
+                if (errors.length > 0) {
+                    html += '<h3 style="color: #dc3545; margin: 30px 0 20px;">❌ エラー</h3>';
+                    errors.forEach(item => {
+                        html += `<div class="error-item"><strong>URL:</strong> ${item.url}<br><strong>エラー:</strong> ${item.error}</div>`;
+                    });
+                }
+            }
+            
             resultsContent.innerHTML = html;
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('クリップボードにコピーしました: ' + text);
+            });
         }
         
         // 初期化
