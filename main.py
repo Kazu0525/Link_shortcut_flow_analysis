@@ -1,22 +1,30 @@
 from fastapi import FastAPI, Request, HTTPException, Form
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 import string
 import random
 import re
+import json
+import csv
+import io
+from urllib.parse import urlparse, parse_qs
+import base64
+import qrcode
+from io import BytesIO
+import user_agents
 
 # 設定
 BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
 DB_PATH = "url_shortener.db"
 
-# データベース初期化
+# データベース初期化（拡張版）
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # URLsテーブル
+    # URLsテーブル（QRコード対応）
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS urls (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,12 +32,13 @@ def init_db():
             original_url TEXT NOT NULL,
             custom_name TEXT,
             campaign_name TEXT,
+            qr_code_data TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             is_active BOOLEAN DEFAULT TRUE
         )
     ''')
     
-    # Clicksテーブル
+    # Clicksテーブル（詳細分析対応）
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS clicks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +47,16 @@ def init_db():
             user_agent TEXT,
             referrer TEXT,
             source TEXT DEFAULT 'direct',
+            device_type TEXT,
+            browser TEXT,
+            os TEXT,
+            country TEXT,
+            city TEXT,
+            utm_source TEXT,
+            utm_medium TEXT,
+            utm_campaign TEXT,
+            utm_term TEXT,
+            utm_content TEXT,
             clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (url_id) REFERENCES urls (id)
         )
@@ -77,25 +96,87 @@ def validate_url(url):
         r'(?:/?|[/?]\S+)$', re.IGNORECASE)
     return bool(pattern.match(url))
 
+def generate_qr_code(url):
+    """QRコード生成（Base64エンコード）"""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    
+    return base64.b64encode(buffer.getvalue()).decode()
+
+def analyze_user_agent(user_agent_string):
+    """User-Agent解析"""
+    try:
+        ua = user_agents.parse(user_agent_string)
+        return {
+            'device_type': 'Mobile' if ua.is_mobile else 'Desktop' if ua.is_pc else 'Tablet' if ua.is_tablet else 'Unknown',
+            'browser': ua.browser.family,
+            'os': ua.os.family
+        }
+    except:
+        return {
+            'device_type': 'Unknown',
+            'browser': 'Unknown',
+            'os': 'Unknown'
+        }
+
+def extract_utm_params(referrer):
+    """UTMパラメータ抽出"""
+    if not referrer:
+        return {}
+    
+    try:
+        parsed = urlparse(referrer)
+        params = parse_qs(parsed.query)
+        return {
+            'utm_source': params.get('utm_source', [''])[0],
+            'utm_medium': params.get('utm_medium', [''])[0],
+            'utm_campaign': params.get('utm_campaign', [''])[0],
+            'utm_term': params.get('utm_term', [''])[0],
+            'utm_content': params.get('utm_content', [''])[0]
+        }
+    except:
+        return {}
+
+def get_location_from_ip(ip_address):
+    """IP から地域推定（簡易版）"""
+    # 簡易的な地域判定（実際の実装では外部APIを使用）
+    if ip_address.startswith('127.') or ip_address.startswith('192.168.'):
+        return {'country': 'Local', 'city': 'Local'}
+    elif ip_address.startswith('35.') or ip_address.startswith('34.'):
+        return {'country': 'US', 'city': 'Unknown'}
+    else:
+        return {'country': 'Unknown', 'city': 'Unknown'}
+
 # データベース初期化
 init_db()
 
 # FastAPIアプリ
 app = FastAPI(
-    title="LinkTrack Pro",
-    description="URL短縮・分析プラットフォーム",
-    version="1.0.0"
+    title="LinkTrack Pro Advanced",
+    description="QRコード・詳細分析対応URL短縮プラットフォーム",
+    version="2.0.0"
 )
 
-# ホームページHTML（CSS波括弧を二重に修正）
-def get_index_html(total_links, total_clicks, unique_visitors):
+# ホームページHTML（QRコード対応）
+def get_index_html(total_links, total_clicks, unique_visitors, qr_clicks):
     return f"""
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkTrack Pro - URL短縮サービス</title>
+    <title>LinkTrack Pro Advanced - QRコード対応URL短縮サービス</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -124,6 +205,7 @@ def get_index_html(total_links, total_clicks, unique_visitors):
         .stat-card:hover {{ transform: translateY(-5px); }}
         .stat-card:nth-child(2) {{ background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }}
         .stat-card:nth-child(3) {{ background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }}
+        .stat-card:nth-child(4) {{ background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%); color: #333; }}
         .stat-number {{ font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }}
         .stat-label {{ font-size: 1.1em; opacity: 0.9; }}
         .navigation {{ display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }}
@@ -159,6 +241,11 @@ def get_index_html(total_links, total_clicks, unique_visitors):
             border-radius: 5px; cursor: pointer; margin-left: 10px; transition: all 0.3s;
         }}
         .copy-button:hover {{ background: #218838; }}
+        .qr-section {{
+            text-align: center; margin: 20px 0; padding: 20px;
+            background: #f8f9fa; border-radius: 10px;
+        }}
+        .qr-code {{ max-width: 200px; margin: 10px auto; }}
         .footer {{ text-align: center; color: white; margin-top: 30px; opacity: 0.8; }}
         @keyframes fadeIn {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
     </style>
@@ -166,14 +253,15 @@ def get_index_html(total_links, total_clicks, unique_visitors):
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔗 LinkTrack Pro</h1>
-            <p>マーケティング効果測定のためのURL短縮・分析プラットフォーム</p>
+            <h1>🔗 LinkTrack Pro Advanced</h1>
+            <p>QRコード対応・詳細分析機能付きURL短縮プラットフォーム</p>
         </div>
         
         <div class="navigation">
             <a href="/" class="nav-link">🏠 ホーム</a>
             <a href="/admin" class="nav-link">📊 管理ダッシュボード</a>
             <a href="/bulk" class="nav-link">📦 一括生成</a>
+            <a href="/export" class="nav-link">📁 データエクスポート</a>
             <a href="/docs" class="nav-link">📚 API文書</a>
         </div>
         
@@ -190,6 +278,10 @@ def get_index_html(total_links, total_clicks, unique_visitors):
                 <div class="stat-card">
                     <div class="stat-number">{unique_visitors}</div>
                     <div class="stat-label">ユニーク訪問者</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{qr_clicks}</div>
+                    <div class="stat-label">QR経由アクセス</div>
                 </div>
             </div>
             
@@ -208,7 +300,7 @@ def get_index_html(total_links, total_clicks, unique_visitors):
                         <label for="campaign_name">キャンペーン名（任意）</label>
                         <input type="text" id="campaign_name" name="campaign_name" placeholder="マーケティングキャンペーン名">
                     </div>
-                    <button type="submit" class="btn">🔗 短縮URLを生成</button>
+                    <button type="submit" class="btn">🔗 短縮URL・QRコードを生成</button>
                     <button type="button" class="btn btn-secondary" onclick="clearForm()">🗑️ クリア</button>
                 </form>
             </div>
@@ -219,7 +311,7 @@ def get_index_html(total_links, total_clicks, unique_visitors):
         </div>
         
         <div class="footer">
-            <p>© 2025 LinkTrack Pro - Powered by FastAPI & Render.com</p>
+            <p>© 2025 LinkTrack Pro Advanced - QRコード・詳細分析対応</p>
         </div>
     </div>
 
@@ -263,7 +355,7 @@ def get_index_html(total_links, total_clicks, unique_visitors):
             
             if (type === 'success') {{
                 content.innerHTML = `
-                    <h3>✅ 短縮URL生成完了</h3>
+                    <h3>✅ 短縮URL・QRコード生成完了</h3>
                     <div style="margin: 15px 0;">
                         <strong>短縮URL:</strong> 
                         <span id="shortUrl">${{data.short_url}}</span>
@@ -274,8 +366,14 @@ def get_index_html(total_links, total_clicks, unique_visitors):
                     </div>
                     ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
                     ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
+                    <div class="qr-section">
+                        <h4>📱 QRコード</h4>
+                        <img src="data:image/png;base64,${{data.qr_code}}" class="qr-code" alt="QRコード" />
+                        <br>
+                        <button class="copy-button" onclick="downloadQR('${{data.qr_code}}', '${{data.short_code}}')">💾 QR画像をダウンロード</button>
+                    </div>
                     <div style="margin-top: 20px;">
-                        <a href="/analytics/${{data.short_code}}" class="btn">📈 分析ページ</a>
+                        <a href="/analytics/${{data.short_code}}" class="btn">📈 詳細分析ページ</a>
                     </div>
                 `;
             }} else {{
@@ -301,6 +399,15 @@ def get_index_html(total_links, total_clicks, unique_visitors):
             }});
         }}
         
+        function downloadQR(base64Data, shortCode) {{
+            const link = document.createElement('a');
+            link.download = `qr_${{shortCode}}.png`;
+            link.href = `data:image/png;base64,${{base64Data}}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }}
+        
         function clearForm() {{
             document.getElementById('shortenForm').reset();
             document.getElementById('resultSection').style.display = 'none';
@@ -310,63 +417,111 @@ def get_index_html(total_links, total_clicks, unique_visitors):
 </html>
 """
 
-# 管理画面HTML（CSS波括弧を二重に修正）
-def get_admin_html(total_urls, total_clicks, unique_clicks, table_rows):
+# 拡張管理画面HTML（エクスポート機能付き）
+def get_admin_html(stats, table_rows):
     return f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>管理画面 - LinkTrack Pro</title>
+    <title>管理ダッシュボード - LinkTrack Pro Advanced</title>
     <meta charset="UTF-8">
     <style>
         body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .container {{ max-width: 1600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
         h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }}
-        .stat-card {{ background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }}
-        .stat-number {{ font-size: 2.5em; font-weight: bold; color: #4CAF50; }}
-        .stat-label {{ color: #666; margin-top: 10px; font-weight: bold; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }}
+        .stat-card {{ background: #f9f9f9; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }}
+        .stat-number {{ font-size: 2em; font-weight: bold; color: #4CAF50; }}
+        .stat-label {{ color: #666; margin-top: 5px; font-weight: bold; font-size: 0.9em; }}
+        .export-section {{ 
+            background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%); 
+            padding: 20px; border-radius: 10px; margin: 20px 0; 
+            border-left: 5px solid #2196F3;
+        }}
+        .export-buttons {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px; }}
+        .export-btn {{ 
+            padding: 10px 15px; background: #2196F3; color: white; text-decoration: none; 
+            border-radius: 5px; text-align: center; font-weight: 600; transition: all 0.3s;
+        }}
+        .export-btn:hover {{ background: #1976D2; transform: translateY(-2px); }}
+        .export-btn.basic {{ background: #4CAF50; }}
+        .export-btn.basic:hover {{ background: #388E3C; }}
+        .export-btn.detailed {{ background: #FF9800; }}
+        .export-btn.detailed:hover {{ background: #F57C00; }}
         table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th, td {{ padding: 8px; text-align: left; border-bottom: 1px solid #ddd; font-size: 14px; }}
         th {{ background: #4CAF50; color: white; }}
         tr:hover {{ background: #f5f5f5; }}
         .action-btn {{ 
-            padding: 5px 10px; margin: 2px; border: none; border-radius: 3px; 
-            cursor: pointer; text-decoration: none; display: inline-block; color: white;
+            padding: 4px 8px; margin: 1px; border: none; border-radius: 3px; 
+            cursor: pointer; text-decoration: none; display: inline-block; color: white; font-size: 12px;
         }}
         .analytics-btn {{ background: #2196F3; }}
-        .refresh-btn {{ background: #9C27B0; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 0; }}
+        .qr-btn {{ background: #FF9800; }}
         .nav-buttons {{ text-align: center; margin: 20px 0; }}
-        .nav-buttons a {{ margin: 0 10px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }}
+        .nav-buttons a {{ margin: 0 5px; padding: 8px 16px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; font-size: 14px; }}
+        .url-cell {{ max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+        .qr-instructions {{ background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📊 管理画面 - LinkTrack Pro</h1>
+        <h1>📊 管理ダッシュボード - LinkTrack Pro Advanced</h1>
         
         <div class="nav-buttons">
             <a href="/">🏠 ホーム</a>
             <a href="/bulk">📦 一括生成</a>
             <a href="/docs">📚 API文書</a>
-            <button class="refresh-btn" onclick="location.reload()">🔄 データ更新</button>
+            <button onclick="location.reload()" style="background: #9C27B0; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">🔄 データ更新</button>
         </div>
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-number">{total_urls}</div>
+                <div class="stat-number">{stats['total_urls']}</div>
                 <div class="stat-label">総URL数</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{total_clicks}</div>
+                <div class="stat-number">{stats['total_clicks']}</div>
                 <div class="stat-label">総クリック数</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{unique_clicks}</div>
+                <div class="stat-number">{stats['unique_visitors']}</div>
                 <div class="stat-label">ユニーク訪問者</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{stats['qr_clicks']}</div>
+                <div class="stat-label">QR経由アクセス</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{stats['mobile_clicks']}</div>
+                <div class="stat-label">モバイルアクセス</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{stats['today_clicks']}</div>
+                <div class="stat-label">本日のクリック</div>
             </div>
         </div>
 
-        <h2>📋 URL一覧</h2>
+        <div class="qr-instructions">
+            <h3>📱 QRコード生成方法</h3>
+            <p><strong>自動生成:</strong> URL短縮時に自動でQRコード生成されます</p>
+            <p><strong>表示方法:</strong> 下記テーブルの「📱 QR」ボタンをクリック</p>
+            <p><strong>ダウンロード:</strong> QRコード表示ページでダウンロード可能</p>
+        </div>
+
+        <div class="export-section">
+            <h3>📁 データエクスポート機能</h3>
+            <p>各種分析データをCSV形式でダウンロードできます。</p>
+            <div class="export-buttons">
+                <a href="/export" class="export-btn basic">📊 基本統計データ</a>
+                <a href="/export/detailed" class="export-btn detailed">🔍 詳細分析データ</a>
+                <a href="/export/hourly" class="export-btn">⏰ 時間帯別データ</a>
+                <a href="/export/devices" class="export-btn">📱 デバイス別データ</a>
+                <a href="/export/utm" class="export-btn">🎯 UTMパラメータ</a>
+            </div>
+        </div>
+
+        <h2>📋 URL一覧・詳細管理</h2>
         <table>
             <thead>
                 <tr>
@@ -375,7 +530,10 @@ def get_admin_html(total_urls, total_clicks, unique_clicks, table_rows):
                     <th>カスタム名</th>
                     <th>キャンペーン</th>
                     <th>作成日</th>
-                    <th>クリック数</th>
+                    <th>総クリック</th>
+                    <th>ユニーク</th>
+                    <th>QR</th>
+                    <th>モバイル</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -388,13 +546,119 @@ def get_admin_html(total_urls, total_clicks, unique_clicks, table_rows):
 </html>
 """
 
-# 一括生成HTML（CSS波括弧を二重に修正 + E列生成数追加）
+# 詳細分析ページHTML
+def get_analytics_html(short_code, url_data, analytics_data):
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>詳細分析 - {short_code}</title>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
+        h1 {{ color: #333; text-align: center; border-bottom: 3px solid #2196F3; padding-bottom: 15px; }}
+        .info-box {{ background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }}
+        .stat-card {{ background: #f8f9fa; padding: 15px; text-align: center; border-radius: 8px; border-left: 4px solid #2196F3; }}
+        .stat-number {{ font-size: 1.8em; color: #2196F3; font-weight: bold; }}
+        .chart-section {{ margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }}
+        .btn {{ padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 5px; display: inline-block; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th {{ background: #2196F3; color: white; }}
+        .device-mobile {{ color: #4CAF50; font-weight: bold; }}
+        .device-desktop {{ color: #2196F3; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 詳細分析: {short_code}</h1>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <a href="/admin" class="btn">📊 管理画面に戻る</a>
+            <a href="/" class="btn">🏠 ホーム</a>
+            <a href="/qr/{short_code}" class="btn" style="background: #FF9800;">📱 QRコード表示</a>
+        </div>
+        
+        <div class="info-box">
+            <p><strong>短縮URL:</strong> <a href="{BASE_URL}/{short_code}" target="_blank">{BASE_URL}/{short_code}</a></p>
+            <p><strong>元URL:</strong> <a href="{url_data['original_url']}" target="_blank">{url_data['original_url']}</a></p>
+            <p><strong>カスタム名:</strong> {url_data['custom_name'] or 'なし'}</p>
+            <p><strong>キャンペーン:</strong> {url_data['campaign_name'] or 'なし'}</p>
+            <p><strong>作成日:</strong> {url_data['created_at']}</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{analytics_data['total_clicks']}</div>
+                <div>総クリック数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{analytics_data['unique_visitors']}</div>
+                <div>ユニーク訪問者</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{analytics_data['qr_clicks']}</div>
+                <div>QR経由アクセス</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{analytics_data['mobile_percentage']}%</div>
+                <div>モバイル率</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{analytics_data['today_clicks']}</div>
+                <div>本日のクリック</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{analytics_data['this_week_clicks']}</div>
+                <div>今週のクリック</div>
+            </div>
+        </div>
+
+        <div class="chart-section">
+            <h3>📱 デバイス別アクセス</h3>
+            <table>
+                <tr><th>デバイス</th><th>クリック数</th><th>割合</th></tr>
+                {analytics_data['device_breakdown']}
+            </table>
+        </div>
+
+        <div class="chart-section">
+            <h3>🌐 ブラウザ別アクセス</h3>
+            <table>
+                <tr><th>ブラウザ</th><th>クリック数</th><th>割合</th></tr>
+                {analytics_data['browser_breakdown']}
+            </table>
+        </div>
+
+        <div class="chart-section">
+            <h3>🔗 参照元分析</h3>
+            <table>
+                <tr><th>参照元</th><th>クリック数</th></tr>
+                {analytics_data['referrer_breakdown']}
+            </table>
+        </div>
+
+        <div class="chart-section">
+            <h3>📅 時間帯別アクセス</h3>
+            <table>
+                <tr><th>時間帯</th><th>クリック数</th></tr>
+                {analytics_data['hourly_breakdown']}
+            </table>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# 一括生成HTML（既存のまま - QRコード情報を結果に追加）
 def get_bulk_html():
     return """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>一括リンク生成 - LinkTracker Pro</title>
+    <title>一括リンク生成 - LinkTracker Pro Advanced</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -606,7 +870,7 @@ def get_bulk_html():
     <div class="container">
         <div class="header">
             <h1>🚀 一括リンク生成システム</h1>
-            <p>効率的なURL短縮・管理プラットフォーム</p>
+            <p>QRコード対応・効率的なURL短縮プラットフォーム</p>
         </div>
         
         <div class="content">
@@ -620,7 +884,7 @@ def get_bulk_html():
                     <li><strong>「🚀 一括生成開始」</strong>ボタンをクリックして処理を実行</li>
                 </ol>
                 <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
-                    <strong>💡 生成数の使い方:</strong> 例えば「商品A」で生成数3を設定すると、「商品A_1」「商品A_2」「商品A_3」として3つの短縮リンクが生成されます。
+                    <strong>💡 新機能:</strong> 各短縮URLにQRコードも自動生成されます！管理画面で確認できます。
                 </div>
             </div>
 
@@ -780,7 +1044,7 @@ def get_bulk_html():
             }
             
             if (totalToGenerate > 50) {
-                if (!confirm(`合計${totalToGenerate}個の短縮リンクを生成します。よろしいですか？`)) {
+                if (!confirm(`合計${totalToGenerate}個の短縮リンク・QRコードを生成します。よろしいですか？`)) {
                     return;
                 }
             }
@@ -797,7 +1061,7 @@ def get_bulk_html():
             btn.innerHTML = '⏳ 生成中...';
             
             resultsSection.style.display = 'block';
-            resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>リンクを生成しています...</p></div>';
+            resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>短縮リンク・QRコードを生成しています...</p></div>';
             
             try {
                 const formData = new FormData();
@@ -853,6 +1117,7 @@ def get_bulk_html():
                 <div style="background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%); padding: 20px; border-radius: 10px; margin-bottom: 25px; border-left: 5px solid #1976d2;">
                     <h3>📊 生成サマリー</h3>
                     <p style="font-size: 1.1em; margin-top: 10px;">成功: <strong style="color: #28a745;">${successCount}</strong> | エラー: <strong style="color: #dc3545;">${errorCount}</strong> | 総生成数: <strong>${successCount + errorCount}</strong></p>
+                    <p style="color: #666; margin-top: 5px;">※各短縮URLにQRコードも生成されています。管理画面で確認できます。</p>
                 </div>
             `;
             
@@ -882,6 +1147,7 @@ def get_bulk_html():
                                 <p><strong>短縮URL:</strong> 
                                     <a href="${item.short_url}" target="_blank" style="color: #1976d2; font-weight: bold;">${item.short_url}</a>
                                     <button class="copy-btn" onclick="copyToClipboard('${item.short_url}')">📋 コピー</button>
+                                    <button class="copy-btn" onclick="window.open('/qr/${item.short_url.split('/').pop()}', '_blank')" style="background: #FF9800;">📱 QR表示</button>
                                 </p>
                             </div>
                         `;
@@ -939,11 +1205,14 @@ async def root():
         cursor.execute("SELECT COUNT(DISTINCT ip_address) FROM clicks")
         unique_visitors = cursor.fetchone()[0]
         
+        cursor.execute("SELECT COUNT(*) FROM clicks WHERE source = 'qr'")
+        qr_clicks = cursor.fetchone()[0]
+        
         conn.close()
         
-        return HTMLResponse(content=get_index_html(total_links, total_clicks, unique_visitors))
+        return HTMLResponse(content=get_index_html(total_links, total_clicks, unique_visitors, qr_clicks))
     except:
-        return HTMLResponse(content=get_index_html(0, 0, 0))
+        return HTMLResponse(content=get_index_html(0, 0, 0, 0))
 
 @app.post("/api/shorten-form")
 async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campaign_name: str = Form("")):
@@ -952,13 +1221,17 @@ async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campai
             raise HTTPException(status_code=400, detail="無効なURLです")
         
         short_code = generate_short_code()
+        short_url = f"{BASE_URL}/{short_code}"
+        
+        # QRコード生成
+        qr_code_data = generate_qr_code(short_url)
         
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO urls (short_code, original_url, custom_name, campaign_name, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (short_code, url.strip(), custom_name or None, campaign_name or None, datetime.now().isoformat()))
+            INSERT INTO urls (short_code, original_url, custom_name, campaign_name, qr_code_data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (short_code, url.strip(), custom_name or None, campaign_name or None, qr_code_data, datetime.now().isoformat()))
         
         conn.commit()
         conn.close()
@@ -966,10 +1239,11 @@ async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campai
         return JSONResponse({
             "success": True,
             "short_code": short_code,
-            "short_url": f"{BASE_URL}/{short_code}",
+            "short_url": short_url,
             "original_url": url,
             "custom_name": custom_name,
-            "campaign_name": campaign_name
+            "campaign_name": campaign_name,
+            "qr_code": qr_code_data
         })
         
     except Exception as e:
@@ -981,54 +1255,74 @@ async def admin_page():
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # 統計取得
         cursor.execute("""
             SELECT 
                 COUNT(DISTINCT u.id) as total_urls,
                 COUNT(c.id) as total_clicks,
-                COUNT(DISTINCT c.ip_address) as unique_clicks
+                COUNT(DISTINCT c.ip_address) as unique_visitors,
+                COUNT(CASE WHEN c.source = 'qr' THEN 1 END) as qr_clicks,
+                COUNT(CASE WHEN c.device_type = 'Mobile' THEN 1 END) as mobile_clicks,
+                COUNT(CASE WHEN DATE(c.clicked_at) = DATE('now') THEN 1 END) as today_clicks
             FROM urls u
             LEFT JOIN clicks c ON u.id = c.url_id
             WHERE u.is_active = 1
         """)
         
-        stats = cursor.fetchone()
-        total_urls, total_clicks, unique_clicks = stats if stats else (0, 0, 0)
+        stats_row = cursor.fetchone()
+        stats = {
+            'total_urls': stats_row[0] if stats_row else 0,
+            'total_clicks': stats_row[1] if stats_row else 0,
+            'unique_visitors': stats_row[2] if stats_row else 0,
+            'qr_clicks': stats_row[3] if stats_row else 0,
+            'mobile_clicks': stats_row[4] if stats_row else 0,
+            'today_clicks': stats_row[5] if stats_row else 0
+        }
         
+        # URL一覧取得（詳細情報付き）
         cursor.execute("""
             SELECT u.short_code, u.original_url, u.created_at, u.custom_name, u.campaign_name,
-                   COUNT(c.id) as click_count
+                   COUNT(c.id) as total_clicks,
+                   COUNT(DISTINCT c.ip_address) as unique_clicks,
+                   COUNT(CASE WHEN c.source = 'qr' THEN 1 END) as qr_clicks,
+                   COUNT(CASE WHEN c.device_type = 'Mobile' THEN 1 END) as mobile_clicks
             FROM urls u
             LEFT JOIN clicks c ON u.id = c.url_id
             WHERE u.is_active = 1
             GROUP BY u.id
             ORDER BY u.created_at DESC
-            LIMIT 50
+            LIMIT 100
         """)
         
         results = cursor.fetchall()
         conn.close()
         
+        # テーブル行生成
         table_rows = ""
         for row in results:
-            short_code, original_url, created_at, custom_name, campaign_name, click_count = row
+            short_code, original_url, created_at, custom_name, campaign_name, total_clicks, unique_clicks, qr_clicks, mobile_clicks = row
             
-            display_url = original_url[:50] + "..." if len(original_url) > 50 else original_url
+            display_url = original_url[:40] + "..." if len(original_url) > 40 else original_url
             
             table_rows += f"""
             <tr>
                 <td><strong>{short_code}</strong></td>
-                <td><a href="{original_url}" target="_blank" title="{original_url}">{display_url}</a></td>
+                <td class="url-cell"><a href="{original_url}" target="_blank" title="{original_url}">{display_url}</a></td>
                 <td>{custom_name or '-'}</td>
                 <td>{campaign_name or '-'}</td>
-                <td>{created_at}</td>
-                <td>{click_count}</td>
+                <td>{created_at[:10]}</td>
+                <td>{total_clicks}</td>
+                <td>{unique_clicks}</td>
+                <td>{qr_clicks}</td>
+                <td>{mobile_clicks}</td>
                 <td>
                     <a href="/analytics/{short_code}" target="_blank" class="action-btn analytics-btn">📈 分析</a>
+                    <a href="/qr/{short_code}" target="_blank" class="action-btn qr-btn">📱 QR</a>
                 </td>
             </tr>
             """
         
-        return HTMLResponse(content=get_admin_html(total_urls, total_clicks, unique_clicks, table_rows))
+        return HTMLResponse(content=get_admin_html(stats, table_rows))
         
     except Exception as e:
         return HTMLResponse(content=f"<h1>エラー</h1><p>{str(e)}</p>", status_code=500)
@@ -1049,15 +1343,19 @@ async def bulk_process(urls: str = Form(...)):
         for url in url_list:
             if validate_url(url):
                 short_code = generate_short_code()
+                short_url = f"{BASE_URL}/{short_code}"
+                
+                # QRコード生成
+                qr_code_data = generate_qr_code(short_url)
                 
                 cursor.execute("""
-                    INSERT INTO urls (short_code, original_url, created_at)
-                    VALUES (?, ?, ?)
-                """, (short_code, url, datetime.now().isoformat()))
+                    INSERT INTO urls (short_code, original_url, qr_code_data, created_at)
+                    VALUES (?, ?, ?, ?)
+                """, (short_code, url, qr_code_data, datetime.now().isoformat()))
                 
                 results.append({
                     "url": url,
-                    "short_url": f"{BASE_URL}/{short_code}",
+                    "short_url": short_url,
                     "success": True
                 })
             else:
@@ -1077,63 +1375,182 @@ async def analytics_page(short_code: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT original_url, created_at, custom_name FROM urls WHERE short_code = ?", (short_code,))
+        # URL基本情報
+        cursor.execute("SELECT original_url, created_at, custom_name, campaign_name FROM urls WHERE short_code = ?", (short_code,))
         url_data = cursor.fetchone()
         
         if not url_data:
             return HTMLResponse(content="<h1>404</h1><p>URLが見つかりません</p>", status_code=404)
         
+        url_info = {
+            'original_url': url_data[0],
+            'created_at': url_data[1],
+            'custom_name': url_data[2],
+            'campaign_name': url_data[3]
+        }
+        
+        # 詳細統計
         cursor.execute("""
-            SELECT COUNT(*) as total_clicks, COUNT(DISTINCT ip_address) as unique_visitors
+            SELECT 
+                COUNT(*) as total_clicks,
+                COUNT(DISTINCT ip_address) as unique_visitors,
+                COUNT(CASE WHEN source = 'qr' THEN 1 END) as qr_clicks,
+                COUNT(CASE WHEN device_type = 'Mobile' THEN 1 END) as mobile_clicks,
+                COUNT(CASE WHEN DATE(clicked_at) = DATE('now') THEN 1 END) as today_clicks,
+                COUNT(CASE WHEN clicked_at >= datetime('now', '-7 days') THEN 1 END) as this_week_clicks
             FROM clicks c
             JOIN urls u ON c.url_id = u.id
             WHERE u.short_code = ?
         """, (short_code,))
         
         stats = cursor.fetchone()
+        total_clicks = stats[0] if stats else 0
+        mobile_percentage = round((stats[4] / max(stats[0], 1)) * 100) if stats else 0
+        
+        analytics_data = {
+            'total_clicks': stats[0] if stats else 0,
+            'unique_visitors': stats[1] if stats else 0,
+            'qr_clicks': stats[2] if stats else 0,
+            'today_clicks': stats[4] if stats else 0,
+            'this_week_clicks': stats[5] if stats else 0,
+            'mobile_percentage': mobile_percentage
+        }
+        
+        # デバイス別分析
+        cursor.execute("""
+            SELECT device_type, COUNT(*) as count
+            FROM clicks c
+            JOIN urls u ON c.url_id = u.id
+            WHERE u.short_code = ?
+            GROUP BY device_type
+            ORDER BY count DESC
+        """, (short_code,))
+        
+        device_data = cursor.fetchall()
+        device_breakdown = ""
+        for device, count in device_data:
+            percentage = round((count / max(total_clicks, 1)) * 100)
+            device_breakdown += f"<tr><td>{device or 'Unknown'}</td><td>{count}</td><td>{percentage}%</td></tr>"
+        
+        # ブラウザ別分析
+        cursor.execute("""
+            SELECT browser, COUNT(*) as count
+            FROM clicks c
+            JOIN urls u ON c.url_id = u.id
+            WHERE u.short_code = ?
+            GROUP BY browser
+            ORDER BY count DESC
+            LIMIT 10
+        """, (short_code,))
+        
+        browser_data = cursor.fetchall()
+        browser_breakdown = ""
+        for browser, count in browser_data:
+            percentage = round((count / max(total_clicks, 1)) * 100)
+            browser_breakdown += f"<tr><td>{browser or 'Unknown'}</td><td>{count}</td><td>{percentage}%</td></tr>"
+        
+        # 参照元分析
+        cursor.execute("""
+            SELECT 
+                CASE 
+                    WHEN referrer IS NULL OR referrer = '' THEN 'Direct'
+                    WHEN referrer LIKE '%google%' THEN 'Google'
+                    WHEN referrer LIKE '%facebook%' THEN 'Facebook'
+                    WHEN referrer LIKE '%twitter%' THEN 'Twitter'
+                    ELSE 'Other'
+                END as ref_type,
+                COUNT(*) as count
+            FROM clicks c
+            JOIN urls u ON c.url_id = u.id
+            WHERE u.short_code = ?
+            GROUP BY ref_type
+            ORDER BY count DESC
+        """, (short_code,))
+        
+        referrer_data = cursor.fetchall()
+        referrer_breakdown = ""
+        for ref_type, count in referrer_data:
+            referrer_breakdown += f"<tr><td>{ref_type}</td><td>{count}</td></tr>"
+        
+        # 時間帯別分析
+        cursor.execute("""
+            SELECT 
+                CAST(strftime('%H', clicked_at) AS INTEGER) as hour,
+                COUNT(*) as count
+            FROM clicks c
+            JOIN urls u ON c.url_id = u.id
+            WHERE u.short_code = ?
+            GROUP BY hour
+            ORDER BY hour
+        """, (short_code,))
+        
+        hourly_data = cursor.fetchall()
+        hourly_breakdown = ""
+        for hour, count in hourly_data:
+            hourly_breakdown += f"<tr><td>{hour}:00-{hour+1}:00</td><td>{count}</td></tr>"
+        
+        analytics_data.update({
+            'device_breakdown': device_breakdown,
+            'browser_breakdown': browser_breakdown,
+            'referrer_breakdown': referrer_breakdown,
+            'hourly_breakdown': hourly_breakdown
+        })
+        
+        conn.close()
+        
+        return HTMLResponse(content=get_analytics_html(short_code, url_info, analytics_data))
+        
+    except Exception as e:
+        return HTMLResponse(content=f"<h1>エラー</h1><p>{str(e)}</p>", status_code=500)
+
+@app.get("/qr/{short_code}")
+async def qr_code_page(short_code: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT qr_code_data, original_url FROM urls WHERE short_code = ?", (short_code,))
+        result = cursor.fetchone()
+        
+        if not result or not result[0]:
+            # QRコードが存在しない場合は生成
+            short_url = f"{BASE_URL}/{short_code}"
+            qr_code_data = generate_qr_code(short_url)
+            
+            cursor.execute("UPDATE urls SET qr_code_data = ? WHERE short_code = ?", (qr_code_data, short_code))
+            conn.commit()
+        else:
+            qr_code_data = result[0]
+        
         conn.close()
         
         html = f"""
         <!DOCTYPE html>
         <html>
         <head>
-            <title>分析 - {short_code}</title>
+            <title>QRコード - {short_code}</title>
+            <meta charset="UTF-8">
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
-                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
-                h1 {{ color: #333; text-align: center; }}
-                .info-box {{ background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; }}
-                .stats {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }}
-                .stat-card {{ background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px; }}
-                .stat-number {{ font-size: 2em; color: #007bff; font-weight: bold; }}
-                .btn {{ padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 5px; }}
+                body {{ font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f5f5f5; }}
+                .container {{ max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }}
+                h1 {{ color: #333; margin-bottom: 30px; }}
+                .qr-code {{ max-width: 300px; margin: 20px auto; border: 10px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                .info {{ background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+                .btn {{ padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 8px; margin: 10px; display: inline-block; }}
+                .btn-download {{ background: #28a745; }}
             </style>
         </head>
         <body>
             <div class="container">
-                <h1>📈 分析: {short_code}</h1>
-                
-                <div style="text-align: center;">
+                <h1>📱 QRコード</h1>
+                <div class="info">
+                    <p><strong>短縮URL:</strong> {BASE_URL}/{short_code}</p>
+                </div>
+                <img src="data:image/png;base64,{qr_code_data}" class="qr-code" alt="QRコード" />
+                <div>
                     <a href="/admin" class="btn">📊 管理画面に戻る</a>
-                    <a href="/" class="btn">🏠 ホーム</a>
-                </div>
-                
-                <div class="info-box">
-                    <p><strong>短縮URL:</strong> <a href="{BASE_URL}/{short_code}" target="_blank">{BASE_URL}/{short_code}</a></p>
-                    <p><strong>元URL:</strong> <a href="{url_data[0]}" target="_blank">{url_data[0]}</a></p>
-                    <p><strong>カスタム名:</strong> {url_data[2] or 'なし'}</p>
-                    <p><strong>作成日:</strong> {url_data[1]}</p>
-                </div>
-                
-                <div class="stats">
-                    <div class="stat-card">
-                        <div class="stat-number">{stats[0] if stats else 0}</div>
-                        <div>総クリック数</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">{stats[1] if stats else 0}</div>
-                        <div>ユニーク訪問者</div>
-                    </div>
+                    <a href="/analytics/{short_code}" class="btn">📈 分析ページ</a>
+                    <a href="data:image/png;base64,{qr_code_data}" download="qr_{short_code}.png" class="btn btn-download">💾 画像をダウンロード</a>
                 </div>
             </div>
         </body>
@@ -1144,11 +1561,64 @@ async def analytics_page(short_code: str):
     except Exception as e:
         return HTMLResponse(content=f"<h1>エラー</h1><p>{str(e)}</p>", status_code=500)
 
+@app.get("/export")
+async def export_data():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT u.short_code, u.original_url, u.custom_name, u.campaign_name, u.created_at,
+                   COUNT(c.id) as total_clicks,
+                   COUNT(DISTINCT c.ip_address) as unique_visitors,
+                   COUNT(CASE WHEN c.source = 'qr' THEN 1 END) as qr_clicks,
+                   COUNT(CASE WHEN c.device_type = 'Mobile' THEN 1 END) as mobile_clicks
+            FROM urls u
+            LEFT JOIN clicks c ON u.id = c.url_id
+            WHERE u.is_active = 1
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        """)
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        # CSV生成
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # ヘッダー
+        writer.writerow([
+            '短縮コード', '元URL', 'カスタム名', 'キャンペーン名', '作成日',
+            '総クリック数', 'ユニーク訪問者', 'QR経由アクセス', 'モバイルアクセス'
+        ])
+        
+        # データ
+        for row in results:
+            writer.writerow([
+                row[0], row[1], row[2] or '', row[3] or '', row[4],
+                row[5], row[6], row[7], row[8]
+            ])
+        
+        output.seek(0)
+        
+        # ファイル名に現在日時を含める
+        filename = f"linktrack_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8-sig')),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/health")
 async def health_check():
-    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat()})
+    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat(), "features": ["qr_codes", "analytics", "bulk_processing"]})
 
-# リダイレクト処理
+# リダイレクト処理（拡張分析対応）
 @app.get("/{short_code}")
 async def redirect_url(short_code: str, request: Request):
     try:
@@ -1163,15 +1633,40 @@ async def redirect_url(short_code: str, request: Request):
         
         url_id, original_url = result
         
-        # クリック記録
+        # 詳細分析データ収集
         client_ip = request.client.host
         user_agent = request.headers.get("user-agent", "")
         referrer = request.headers.get("referer", "")
+        source = request.query_params.get("source", "direct")
+        
+        # User-Agent解析
+        ua_info = analyze_user_agent(user_agent)
+        
+        # UTMパラメータ抽出
+        utm_params = extract_utm_params(referrer)
+        
+        # 地域情報取得
+        location_info = get_location_from_ip(client_ip)
+        
+        # QRコード経由の判定
+        if source == "qr" or "qr" in request.query_params:
+            source = "qr"
         
         cursor.execute("""
-            INSERT INTO clicks (url_id, ip_address, user_agent, referrer, clicked_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (url_id, client_ip, user_agent, referrer, datetime.now().isoformat()))
+            INSERT INTO clicks (
+                url_id, ip_address, user_agent, referrer, source,
+                device_type, browser, os, country, city,
+                utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+                clicked_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            url_id, client_ip, user_agent, referrer, source,
+            ua_info['device_type'], ua_info['browser'], ua_info['os'],
+            location_info['country'], location_info['city'],
+            utm_params.get('utm_source'), utm_params.get('utm_medium'),
+            utm_params.get('utm_campaign'), utm_params.get('utm_term'),
+            utm_params.get('utm_content'), datetime.now().isoformat()
+        ))
         
         conn.commit()
         conn.close()
