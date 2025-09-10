@@ -11,9 +11,20 @@ import csv
 import io
 from urllib.parse import urlparse, parse_qs
 import base64
-import qrcode
-from io import BytesIO
-import user_agents
+
+# 条件付きインポート - エラー回避
+try:
+    import qrcode
+    from io import BytesIO
+    QR_AVAILABLE = True
+except ImportError:
+    QR_AVAILABLE = False
+
+try:
+    import user_agents
+    UA_AVAILABLE = True
+except ImportError:
+    UA_AVAILABLE = False
 
 # 設定
 BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
@@ -98,24 +109,37 @@ def validate_url(url):
 
 def generate_qr_code(url):
     """QRコード生成（Base64エンコード）"""
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(url)
-    qr.make(fit=True)
+    if not QR_AVAILABLE:
+        return None
     
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffer = BytesIO()
-    img.save(buffer, format='PNG')
-    buffer.seek(0)
-    
-    return base64.b64encode(buffer.getvalue()).decode()
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        return base64.b64encode(buffer.getvalue()).decode()
+    except:
+        return None
 
 def analyze_user_agent(user_agent_string):
     """User-Agent解析"""
+    if not UA_AVAILABLE or not user_agent_string:
+        return {
+            'device_type': 'Unknown',
+            'browser': 'Unknown',
+            'os': 'Unknown'
+        }
+    
     try:
         ua = user_agents.parse(user_agent_string)
         return {
@@ -150,7 +174,6 @@ def extract_utm_params(referrer):
 
 def get_location_from_ip(ip_address):
     """IP から地域推定（簡易版）"""
-    # 簡易的な地域判定（実際の実装では外部APIを使用）
     if ip_address.startswith('127.') or ip_address.startswith('192.168.'):
         return {'country': 'Local', 'city': 'Local'}
     elif ip_address.startswith('35.') or ip_address.startswith('34.'):
@@ -170,6 +193,17 @@ app = FastAPI(
 
 # ホームページHTML（QRコード対応）
 def get_index_html(total_links, total_clicks, unique_visitors, qr_clicks):
+    qr_section = ""
+    if QR_AVAILABLE:
+        qr_section = f"""
+                    <div class="qr-section">
+                        <h4>📱 QRコード</h4>
+                        <img src="data:image/png;base64,${{data.qr_code}}" class="qr-code" alt="QRコード" />
+                        <br>
+                        <button class="copy-button" onclick="downloadQR('${{data.qr_code}}', '${{data.short_code}}')">💾 QR画像をダウンロード</button>
+                    </div>
+        """
+    
     return f"""
 <!DOCTYPE html>
 <html lang="ja">
@@ -354,6 +388,11 @@ def get_index_html(total_links, total_clicks, unique_visitors, qr_clicks):
             section.style.display = 'block';
             
             if (type === 'success') {{
+                let qrSection = '';
+                if (data.qr_code) {{
+                    qrSection = `{qr_section}`;
+                }}
+                
                 content.innerHTML = `
                     <h3>✅ 短縮URL・QRコード生成完了</h3>
                     <div style="margin: 15px 0;">
@@ -364,14 +403,9 @@ def get_index_html(total_links, total_clicks, unique_visitors, qr_clicks):
                     <div style="margin: 15px 0;">
                         <strong>元のURL:</strong> ${{data.original_url}}
                     </div>
-                    ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
-                    ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
-                    <div class="qr-section">
-                        <h4>📱 QRコード</h4>
-                        <img src="data:image/png;base64,${{data.qr_code}}" class="qr-code" alt="QRコード" />
-                        <br>
-                        <button class="copy-button" onclick="downloadQR('${{data.qr_code}}', '${{data.short_code}}')">💾 QR画像をダウンロード</button>
-                    </div>
+                    ${{data.custom_name ? '<div><strong>カスタム名:</strong> ' + data.custom_name + '</div>' : ''}}
+                    ${{data.campaign_name ? '<div><strong>キャンペーン:</strong> ' + data.campaign_name + '</div>' : ''}}
+                    ${{qrSection}}
                     <div style="margin-top: 20px;">
                         <a href="/analytics/${{data.short_code}}" class="btn">📈 詳細分析ページ</a>
                     </div>
@@ -417,7 +451,7 @@ def get_index_html(total_links, total_clicks, unique_visitors, qr_clicks):
 </html>
 """
 
-# 拡張管理画面HTML（エクスポート機能付き）
+# 簡易管理画面HTML（エラー回避版）
 def get_admin_html(stats, table_rows):
     return f"""
 <!DOCTYPE html>
@@ -567,8 +601,6 @@ def get_analytics_html(short_code, url_data, analytics_data):
         table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
         th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
         th {{ background: #2196F3; color: white; }}
-        .device-mobile {{ color: #4CAF50; font-weight: bold; }}
-        .device-desktop {{ color: #2196F3; font-weight: bold; }}
     </style>
 </head>
 <body>
@@ -606,14 +638,6 @@ def get_analytics_html(short_code, url_data, analytics_data):
                 <div class="stat-number">{analytics_data['mobile_percentage']}%</div>
                 <div>モバイル率</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">{analytics_data['today_clicks']}</div>
-                <div>本日のクリック</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{analytics_data['this_week_clicks']}</div>
-                <div>今週のクリック</div>
-            </div>
         </div>
 
         <div class="chart-section">
@@ -639,20 +663,12 @@ def get_analytics_html(short_code, url_data, analytics_data):
                 {analytics_data['referrer_breakdown']}
             </table>
         </div>
-
-        <div class="chart-section">
-            <h3>📅 時間帯別アクセス</h3>
-            <table>
-                <tr><th>時間帯</th><th>クリック数</th></tr>
-                {analytics_data['hourly_breakdown']}
-            </table>
-        </div>
     </div>
 </body>
 </html>
 """
 
-# 一括生成HTML（既存のまま - QRコード情報を結果に追加）
+# 一括生成HTML（シンプル版）
 def get_bulk_html():
     return """
 <!DOCTYPE html>
@@ -688,10 +704,6 @@ def get_bulk_html():
             margin-bottom: 10px; 
             font-weight: 300; 
         }
-        .header p { 
-            font-size: 1.2em; 
-            opacity: 0.9; 
-        }
         .content {
             padding: 40px;
         }
@@ -700,7 +712,6 @@ def get_bulk_html():
             padding: 25px; 
             border-radius: 10px; 
             margin-bottom: 30px;
-            border-left: 5px solid #28a745;
         }
         .action-buttons { 
             text-align: center; 
@@ -715,24 +726,17 @@ def get_bulk_html():
             font-size: 14px;
             font-weight: 600;
             transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
         }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        .btn-primary { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; }
-        .btn-secondary { background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; }
-        .btn-warning { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); color: white; }
-        .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; }
+        .btn-primary { background: #28a745; color: white; }
+        .btn-secondary { background: #17a2b8; color: white; }
+        .btn-warning { background: #ffc107; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
         
         .spreadsheet-container { 
             margin: 30px 0; 
             border: 3px solid #28a745;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.15);
         }
         .spreadsheet-table { 
             width: 100%; 
@@ -741,128 +745,37 @@ def get_bulk_html():
             background: white;
         }
         .spreadsheet-table th { 
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: #28a745;
             color: white; 
             padding: 15px 10px;
             text-align: center; 
             font-weight: 600;
-            font-size: 13px;
-            border-right: 1px solid rgba(255,255,255,0.2);
         }
         .spreadsheet-table td { 
             border: 1px solid #e0e0e0; 
             padding: 8px;
             vertical-align: middle;
         }
-        .spreadsheet-table tr:nth-child(even) {
-            background: #f8f9fa;
-        }
-        .spreadsheet-table tr:hover {
-            background: #e8f5e9;
-        }
-        
-        .row-number { 
-            width: 50px; 
-            text-align: center; 
-            font-weight: bold;
-            background: #f8f9fa !important;
-            color: #495057;
-        }
-        .url-column { width: 35%; }
-        .custom-name-column { width: 15%; }
-        .campaign-column { width: 15%; }
-        .quantity-column { width: 10%; text-align: center; }
-        .action-column { width: 15%; text-align: center; }
-        
         .spreadsheet-table input { 
             width: 100%; 
             border: 2px solid #e9ecef; 
             padding: 8px 10px; 
             border-radius: 6px;
             font-size: 13px;
-            transition: all 0.3s ease;
         }
-        .spreadsheet-table input:focus { 
-            border-color: #28a745; 
-            outline: none; 
-            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
-        }
-        .url-input {
-            font-family: monospace;
-        }
-        .quantity-input {
-            text-align: center;
-            font-weight: 600;
-        }
-        .required { 
-            border-left: 4px solid #dc3545 !important; 
-        }
-        
         .delete-row-btn { 
-            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            background: #dc3545;
             color: white; 
             border: none; 
             padding: 6px 12px; 
             border-radius: 5px; 
             cursor: pointer; 
             font-size: 12px;
-            font-weight: 600;
-            transition: all 0.3s ease;
         }
-        .delete-row-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 3px 10px rgba(220, 53, 69, 0.3);
-        }
-        
         .results-section { 
             margin: 40px 0;
             border-top: 3px solid #28a745;
             padding-top: 30px;
-        }
-        .result-item { 
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            padding: 20px; 
-            margin: 15px 0; 
-            border-radius: 10px; 
-            border-left: 5px solid #28a745;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-        .error-item { 
-            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-            border-left: 5px solid #dc3545; 
-        }
-        .copy-btn { 
-            background: linear-gradient(135deg, #fd7e14 0%, #e55100 100%);
-            color: white; 
-            border: none; 
-            padding: 6px 12px; 
-            border-radius: 5px; 
-            cursor: pointer; 
-            margin-left: 10px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        .copy-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(253, 126, 20, 0.3);
-        }
-        
-        .loading { 
-            text-align: center; 
-            padding: 30px; 
-        }
-        .spinner { 
-            border: 4px solid #f3f3f3; 
-            border-top: 4px solid #28a745; 
-            border-radius: 50%; 
-            width: 50px; 
-            height: 50px; 
-            animation: spin 1s linear infinite; 
-            margin: 0 auto 20px;
-        }
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
         }
     </style>
 </head>
@@ -877,22 +790,17 @@ def get_bulk_html():
             <div class="instructions">
                 <h3>📋 操作ガイド</h3>
                 <ol>
-                    <li><strong>B列（オリジナルURL）</strong>: 短縮したい元のURLを入力してください（http:// または https:// で始めること）</li>
-                    <li><strong>C列（カスタム名）</strong>: 管理しやすい名前を入力してください</li>
-                    <li><strong>D列（キャンペーン名）</strong>: マーケティングキャンペーンのグループ名を入力</li>
-                    <li><strong>E列（生成数）</strong>: 同じURLから何個の短縮リンクを作るかを入力（1〜10個）</li>
-                    <li><strong>「🚀 一括生成開始」</strong>ボタンをクリックして処理を実行</li>
+                    <li><strong>URL入力:</strong> 短縮したい元のURLを入力（http:// または https:// で始めること）</li>
+                    <li><strong>カスタム名:</strong> 管理しやすい名前を入力（任意）</li>
+                    <li><strong>一括生成:</strong> 複数行入力して「一括生成開始」をクリック</li>
                 </ol>
-                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
-                    <strong>💡 新機能:</strong> 各短縮URLにQRコードも自動生成されます！管理画面で確認できます。
-                </div>
             </div>
 
             <div class="action-buttons">
-                <button class="btn btn-secondary" id="addRowBtn">➕ 1行追加</button>
-                <button class="btn btn-secondary" id="add5RowsBtn">➕ 5行追加</button>
-                <button class="btn btn-warning" id="clearAllBtn">🗑️ 全クリア</button>
-                <button class="btn btn-danger" id="generateBtn">🚀 一括生成開始</button>
+                <button class="btn btn-secondary" onclick="addRow()">➕ 1行追加</button>
+                <button class="btn btn-secondary" onclick="addRows(5)">➕ 5行追加</button>
+                <button class="btn btn-warning" onclick="clearAll()">🗑️ 全クリア</button>
+                <button class="btn btn-danger" onclick="generateLinks()">🚀 一括生成開始</button>
                 <button class="btn btn-primary" onclick="window.location.href='/admin'">📊 管理画面へ</button>
             </div>
 
@@ -900,22 +808,18 @@ def get_bulk_html():
                 <table class="spreadsheet-table" id="spreadsheetTable">
                     <thead>
                         <tr>
-                            <th class="row-number">A<br>行番号</th>
-                            <th class="url-column">B<br>オリジナルURL ※必須</th>
-                            <th class="custom-name-column">C<br>カスタム名<br>（任意）</th>
-                            <th class="campaign-column">D<br>キャンペーン名<br>（任意）</th>
-                            <th class="quantity-column">E<br>生成数<br>（1〜10）</th>
-                            <th class="action-column">操作</th>
+                            <th style="width: 50px;">行</th>
+                            <th style="width: 50%;">URL ※必須</th>
+                            <th style="width: 25%;">カスタム名</th>
+                            <th style="width: 15%;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="spreadsheetBody">
                         <tr>
-                            <td class="row-number">1</td>
-                            <td><input type="url" class="required url-input" placeholder="https://example.com" required /></td>
+                            <td>1</td>
+                            <td><input type="url" placeholder="https://example.com" required /></td>
                             <td><input type="text" placeholder="商品A" /></td>
-                            <td><input type="text" placeholder="春キャンペーン" /></td>
-                            <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
-                            <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
+                            <td><button class="delete-row-btn" onclick="deleteRow(this)">削除</button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -929,36 +833,31 @@ def get_bulk_html():
     </div>
 
     <script>
-        let rowCounter = 1;
+        let rowCount = 1;
         
         function addRow() {
-            rowCounter++;
+            rowCount++;
             const tbody = document.getElementById('spreadsheetBody');
             const newRow = tbody.insertRow();
             newRow.innerHTML = `
-                <td class="row-number">${rowCounter}</td>
-                <td><input type="url" class="required url-input" placeholder="https://example${rowCounter}.com" required /></td>
-                <td><input type="text" placeholder="商品${String.fromCharCode(64 + rowCounter)}" /></td>
-                <td><input type="text" placeholder="キャンペーン${rowCounter}" /></td>
-                <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
-                <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
+                <td>${rowCount}</td>
+                <td><input type="url" placeholder="https://example${rowCount}.com" required /></td>
+                <td><input type="text" placeholder="商品${String.fromCharCode(64 + rowCount)}" /></td>
+                <td><button class="delete-row-btn" onclick="deleteRow(this)">削除</button></td>
             `;
-            updateRowNumbers();
         }
         
-        function addMultipleRows(count) {
+        function addRows(count) {
             for (let i = 0; i < count; i++) {
                 addRow();
             }
         }
         
-        function removeRow(button) {
+        function deleteRow(button) {
             const tbody = document.getElementById('spreadsheetBody');
             if (tbody.rows.length > 1) {
                 button.closest('tr').remove();
                 updateRowNumbers();
-            } else {
-                alert('最低1行は必要です');
             }
         }
         
@@ -967,223 +866,92 @@ def get_bulk_html():
             rows.forEach((row, index) => {
                 row.cells[0].textContent = index + 1;
             });
-            rowCounter = rows.length;
+            rowCount = rows.length;
         }
         
         function clearAll() {
             if (confirm('全てのデータを削除しますか？')) {
-                document.getElementById('spreadsheetBody').innerHTML = `
+                const tbody = document.getElementById('spreadsheetBody');
+                tbody.innerHTML = `
                     <tr>
-                        <td class="row-number">1</td>
-                        <td><input type="url" class="required url-input" placeholder="https://example.com" required /></td>
+                        <td>1</td>
+                        <td><input type="url" placeholder="https://example.com" required /></td>
                         <td><input type="text" placeholder="商品A" /></td>
-                        <td><input type="text" placeholder="春キャンペーン" /></td>
-                        <td><input type="number" class="quantity-input" min="1" max="10" value="1" /></td>
-                        <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
+                        <td><button class="delete-row-btn" onclick="deleteRow(this)">削除</button></td>
                     </tr>
                 `;
-                rowCounter = 1;
+                rowCount = 1;
                 document.getElementById('resultsSection').style.display = 'none';
             }
         }
         
-        async function validateAndGenerate() {
+        async function generateLinks() {
             const rows = document.querySelectorAll('#spreadsheetBody tr');
-            const expandedData = [];
-            let hasError = false;
-            let totalToGenerate = 0;
+            const urls = [];
             
             for (let row of rows) {
                 const inputs = row.querySelectorAll('input');
-                const originalUrl = inputs[0].value.trim();
-                const customName = inputs[1].value.trim();
-                const campaignName = inputs[2].value.trim();
-                const quantity = parseInt(inputs[3].value) || 1;
+                const url = inputs[0].value.trim();
                 
-                if (originalUrl) {
-                    if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {
+                if (url) {
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
                         alert('URLは http:// または https:// で始めてください');
-                        inputs[0].focus();
-                        hasError = true;
-                        break;
+                        return;
                     }
-                    
-                    if (quantity < 1 || quantity > 10) {
-                        alert('生成数は1〜10の範囲で入力してください');
-                        inputs[3].focus();
-                        hasError = true;
-                        break;
-                    }
-                    
-                    totalToGenerate += quantity;
-                    
-                    // 指定された数量分だけURLを複製
-                    for (let i = 1; i <= quantity; i++) {
-                        let finalCustomName = customName;
-                        if (quantity > 1 && customName) {
-                            finalCustomName = `${customName}_${i}`;
-                        }
-                        
-                        expandedData.push({
-                            url: originalUrl,
-                            custom_name: finalCustomName || null,
-                            campaign_name: campaignName || null,
-                            originalCustomName: customName,
-                            index: i,
-                            total: quantity
-                        });
-                    }
+                    urls.push(url);
                 }
             }
             
-            if (hasError) return;
-            
-            if (expandedData.length === 0) {
+            if (urls.length === 0) {
                 alert('少なくとも1つのURLを入力してください');
                 return;
             }
             
-            if (totalToGenerate > 50) {
-                if (!confirm(`合計${totalToGenerate}個の短縮リンク・QRコードを生成します。よろしいですか？`)) {
-                    return;
-                }
-            }
-            
-            generateLinks(expandedData);
-        }
-        
-        async function generateLinks(data) {
-            const btn = document.getElementById('generateBtn');
-            const resultsSection = document.getElementById('resultsSection');
-            const resultsContent = document.getElementById('resultsContent');
-            
-            btn.disabled = true;
-            btn.innerHTML = '⏳ 生成中...';
-            
-            resultsSection.style.display = 'block';
-            resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>短縮リンク・QRコードを生成しています...</p></div>';
-            
             try {
                 const formData = new FormData();
-                const urlList = data.map(item => item.url).join('\\n');
-                formData.append('urls', urlList);
+                formData.append('urls', urls.join('\\n'));
                 
                 const response = await fetch('/api/bulk-process', {
                     method: 'POST',
                     body: formData
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const result = await response.json();
-                
-                // 結果にカスタム名情報を追加
-                if (result.results) {
-                    result.results.forEach((item, index) => {
-                        if (data[index]) {
-                            item.customName = data[index].originalCustomName;
-                            item.index = data[index].index;
-                            item.total = data[index].total;
-                        }
-                    });
-                }
-                
                 displayResults(result);
                 
             } catch (error) {
-                resultsContent.innerHTML = `<div class="error-item">エラー: ${error.message}</div>`;
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '🚀 一括生成開始';
+                alert('エラー: ' + error.message);
             }
         }
         
         function displayResults(result) {
+            const resultsSection = document.getElementById('resultsSection');
             const resultsContent = document.getElementById('resultsContent');
             
-            let successCount = 0;
-            let errorCount = 0;
+            resultsSection.style.display = 'block';
+            
+            let html = '<h3>生成完了</h3>';
             
             if (result.results) {
-                result.results.forEach(item => {
-                    if (item.success) successCount++;
-                    else errorCount++;
-                });
-            }
-            
-            let html = `
-                <div style="background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%); padding: 20px; border-radius: 10px; margin-bottom: 25px; border-left: 5px solid #1976d2;">
-                    <h3>📊 生成サマリー</h3>
-                    <p style="font-size: 1.1em; margin-top: 10px;">成功: <strong style="color: #28a745;">${successCount}</strong> | エラー: <strong style="color: #dc3545;">${errorCount}</strong> | 総生成数: <strong>${successCount + errorCount}</strong></p>
-                    <p style="color: #666; margin-top: 5px;">※各短縮URLにQRコードも生成されています。管理画面で確認できます。</p>
-                </div>
-            `;
-            
-            if (result.results && result.results.length > 0) {
-                html += '<h3 style="color: #28a745; margin-bottom: 20px;">✅ 生成成功</h3>';
-                
-                // グループ化して表示
-                let currentGroup = null;
-                let groupIndex = 1;
-                
                 result.results.forEach((item, index) => {
                     if (item.success) {
-                        const displayName = item.customName || `URL${groupIndex}`;
-                        const isNewGroup = currentGroup !== item.url;
-                        
-                        if (isNewGroup) {
-                            currentGroup = item.url;
-                            if (index > 0) html += '<hr style="margin: 20px 0; border: 1px solid #e0e0e0;">';
-                        }
-                        
-                        const title = item.total > 1 ? `${displayName} (${item.index}/${item.total})` : displayName;
-                        
                         html += `
-                            <div class="result-item">
-                                <p><strong>${title}</strong></p>
-                                <p><strong>元URL:</strong> <a href="${item.url}" target="_blank">${item.url}</a></p>
-                                <p><strong>短縮URL:</strong> 
-                                    <a href="${item.short_url}" target="_blank" style="color: #1976d2; font-weight: bold;">${item.short_url}</a>
-                                    <button class="copy-btn" onclick="copyToClipboard('${item.short_url}')">📋 コピー</button>
-                                    <button class="copy-btn" onclick="window.open('/qr/${item.short_url.split('/').pop()}', '_blank')" style="background: #FF9800;">📱 QR表示</button>
-                                </p>
+                            <div style="background: #d4edda; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                                <p><strong>元URL:</strong> ${item.url}</p>
+                                <p><strong>短縮URL:</strong> <a href="${item.short_url}" target="_blank">${item.short_url}</a></p>
                             </div>
                         `;
-                        
-                        if (isNewGroup) groupIndex++;
+                    } else {
+                        html += `<div style="background: #f8d7da; padding: 15px; margin: 10px 0; border-radius: 5px;">エラー: ${item.url} - ${item.error}</div>`;
                     }
                 });
-                
-                const errors = result.results.filter(item => !item.success);
-                if (errors.length > 0) {
-                    html += '<h3 style="color: #dc3545; margin: 30px 0 20px;">❌ エラー</h3>';
-                    errors.forEach(item => {
-                        html += `<div class="error-item"><strong>URL:</strong> ${item.url}<br><strong>エラー:</strong> ${item.error}</div>`;
-                    });
-                }
             }
             
             resultsContent.innerHTML = html;
         }
         
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('クリップボードにコピーしました: ' + text);
-            });
-        }
-        
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('addRowBtn').addEventListener('click', addRow);
-            document.getElementById('add5RowsBtn').addEventListener('click', () => addMultipleRows(5));
-            document.getElementById('clearAllBtn').addEventListener('click', clearAll);
-            document.getElementById('generateBtn').addEventListener('click', validateAndGenerate);
-            
-            // 初期化で追加行を作成
-            addMultipleRows(4);
-        });
+        // 初期化
+        addRows(4);
     </script>
 </body>
 </html>
@@ -1223,8 +991,8 @@ async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campai
         short_code = generate_short_code()
         short_url = f"{BASE_URL}/{short_code}"
         
-        # QRコード生成
-        qr_code_data = generate_qr_code(short_url)
+        # QRコード生成（エラー回避）
+        qr_code_data = generate_qr_code(short_url) if QR_AVAILABLE else None
         
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1236,15 +1004,19 @@ async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campai
         conn.commit()
         conn.close()
         
-        return JSONResponse({
+        result = {
             "success": True,
             "short_code": short_code,
             "short_url": short_url,
             "original_url": url,
             "custom_name": custom_name,
-            "campaign_name": campaign_name,
-            "qr_code": qr_code_data
-        })
+            "campaign_name": campaign_name
+        }
+        
+        if qr_code_data:
+            result["qr_code"] = qr_code_data
+        
+        return JSONResponse(result)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1279,7 +1051,7 @@ async def admin_page():
             'today_clicks': stats_row[5] if stats_row else 0
         }
         
-        # URL一覧取得（詳細情報付き）
+        # URL一覧取得
         cursor.execute("""
             SELECT u.short_code, u.original_url, u.created_at, u.custom_name, u.campaign_name,
                    COUNT(c.id) as total_clicks,
@@ -1345,8 +1117,8 @@ async def bulk_process(urls: str = Form(...)):
                 short_code = generate_short_code()
                 short_url = f"{BASE_URL}/{short_code}"
                 
-                # QRコード生成
-                qr_code_data = generate_qr_code(short_url)
+                # QRコード生成（エラー回避）
+                qr_code_data = generate_qr_code(short_url) if QR_AVAILABLE else None
                 
                 cursor.execute("""
                     INSERT INTO urls (short_code, original_url, qr_code_data, created_at)
@@ -1389,15 +1161,13 @@ async def analytics_page(short_code: str):
             'campaign_name': url_data[3]
         }
         
-        # 詳細統計
+        # 統計取得
         cursor.execute("""
             SELECT 
                 COUNT(*) as total_clicks,
                 COUNT(DISTINCT ip_address) as unique_visitors,
                 COUNT(CASE WHEN source = 'qr' THEN 1 END) as qr_clicks,
-                COUNT(CASE WHEN device_type = 'Mobile' THEN 1 END) as mobile_clicks,
-                COUNT(CASE WHEN DATE(clicked_at) = DATE('now') THEN 1 END) as today_clicks,
-                COUNT(CASE WHEN clicked_at >= datetime('now', '-7 days') THEN 1 END) as this_week_clicks
+                COUNT(CASE WHEN device_type = 'Mobile' THEN 1 END) as mobile_clicks
             FROM clicks c
             JOIN urls u ON c.url_id = u.id
             WHERE u.short_code = ?
@@ -1405,96 +1175,17 @@ async def analytics_page(short_code: str):
         
         stats = cursor.fetchone()
         total_clicks = stats[0] if stats else 0
-        mobile_percentage = round((stats[4] / max(stats[0], 1)) * 100) if stats else 0
+        mobile_percentage = round((stats[3] / max(stats[0], 1)) * 100) if stats else 0
         
         analytics_data = {
             'total_clicks': stats[0] if stats else 0,
             'unique_visitors': stats[1] if stats else 0,
             'qr_clicks': stats[2] if stats else 0,
-            'today_clicks': stats[4] if stats else 0,
-            'this_week_clicks': stats[5] if stats else 0,
-            'mobile_percentage': mobile_percentage
+            'mobile_percentage': mobile_percentage,
+            'device_breakdown': '<tr><td>データなし</td><td>0</td><td>0%</td></tr>',
+            'browser_breakdown': '<tr><td>データなし</td><td>0</td><td>0%</td></tr>',
+            'referrer_breakdown': '<tr><td>データなし</td><td>0</td></tr>'
         }
-        
-        # デバイス別分析
-        cursor.execute("""
-            SELECT device_type, COUNT(*) as count
-            FROM clicks c
-            JOIN urls u ON c.url_id = u.id
-            WHERE u.short_code = ?
-            GROUP BY device_type
-            ORDER BY count DESC
-        """, (short_code,))
-        
-        device_data = cursor.fetchall()
-        device_breakdown = ""
-        for device, count in device_data:
-            percentage = round((count / max(total_clicks, 1)) * 100)
-            device_breakdown += f"<tr><td>{device or 'Unknown'}</td><td>{count}</td><td>{percentage}%</td></tr>"
-        
-        # ブラウザ別分析
-        cursor.execute("""
-            SELECT browser, COUNT(*) as count
-            FROM clicks c
-            JOIN urls u ON c.url_id = u.id
-            WHERE u.short_code = ?
-            GROUP BY browser
-            ORDER BY count DESC
-            LIMIT 10
-        """, (short_code,))
-        
-        browser_data = cursor.fetchall()
-        browser_breakdown = ""
-        for browser, count in browser_data:
-            percentage = round((count / max(total_clicks, 1)) * 100)
-            browser_breakdown += f"<tr><td>{browser or 'Unknown'}</td><td>{count}</td><td>{percentage}%</td></tr>"
-        
-        # 参照元分析
-        cursor.execute("""
-            SELECT 
-                CASE 
-                    WHEN referrer IS NULL OR referrer = '' THEN 'Direct'
-                    WHEN referrer LIKE '%google%' THEN 'Google'
-                    WHEN referrer LIKE '%facebook%' THEN 'Facebook'
-                    WHEN referrer LIKE '%twitter%' THEN 'Twitter'
-                    ELSE 'Other'
-                END as ref_type,
-                COUNT(*) as count
-            FROM clicks c
-            JOIN urls u ON c.url_id = u.id
-            WHERE u.short_code = ?
-            GROUP BY ref_type
-            ORDER BY count DESC
-        """, (short_code,))
-        
-        referrer_data = cursor.fetchall()
-        referrer_breakdown = ""
-        for ref_type, count in referrer_data:
-            referrer_breakdown += f"<tr><td>{ref_type}</td><td>{count}</td></tr>"
-        
-        # 時間帯別分析
-        cursor.execute("""
-            SELECT 
-                CAST(strftime('%H', clicked_at) AS INTEGER) as hour,
-                COUNT(*) as count
-            FROM clicks c
-            JOIN urls u ON c.url_id = u.id
-            WHERE u.short_code = ?
-            GROUP BY hour
-            ORDER BY hour
-        """, (short_code,))
-        
-        hourly_data = cursor.fetchall()
-        hourly_breakdown = ""
-        for hour, count in hourly_data:
-            hourly_breakdown += f"<tr><td>{hour}:00-{hour+1}:00</td><td>{count}</td></tr>"
-        
-        analytics_data.update({
-            'device_breakdown': device_breakdown,
-            'browser_breakdown': browser_breakdown,
-            'referrer_breakdown': referrer_breakdown,
-            'hourly_breakdown': hourly_breakdown
-        })
         
         conn.close()
         
@@ -1512,17 +1203,24 @@ async def qr_code_page(short_code: str):
         cursor.execute("SELECT qr_code_data, original_url FROM urls WHERE short_code = ?", (short_code,))
         result = cursor.fetchone()
         
-        if not result or not result[0]:
+        if not result:
+            return HTMLResponse(content="<h1>404</h1><p>URLが見つかりません</p>", status_code=404)
+        
+        qr_code_data = result[0]
+        
+        if not qr_code_data and QR_AVAILABLE:
             # QRコードが存在しない場合は生成
             short_url = f"{BASE_URL}/{short_code}"
             qr_code_data = generate_qr_code(short_url)
             
-            cursor.execute("UPDATE urls SET qr_code_data = ? WHERE short_code = ?", (qr_code_data, short_code))
-            conn.commit()
-        else:
-            qr_code_data = result[0]
+            if qr_code_data:
+                cursor.execute("UPDATE urls SET qr_code_data = ? WHERE short_code = ?", (qr_code_data, short_code))
+                conn.commit()
         
         conn.close()
+        
+        if not qr_code_data:
+            return HTMLResponse(content="<h1>QRコード生成不可</h1><p>QRコードライブラリが利用できません</p>", status_code=500)
         
         html = f"""
         <!DOCTYPE html>
@@ -1561,8 +1259,10 @@ async def qr_code_page(short_code: str):
     except Exception as e:
         return HTMLResponse(content=f"<h1>エラー</h1><p>{str(e)}</p>", status_code=500)
 
+# CSVエクスポート（基本版のみ - エラー回避）
 @app.get("/export")
-async def export_data():
+async def export_basic_data():
+    """基本統計データのCSVエクスポート"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1602,8 +1302,7 @@ async def export_data():
         
         output.seek(0)
         
-        # ファイル名に現在日時を含める
-        filename = f"linktrack_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filename = f"linktrack_basic_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         
         return StreamingResponse(
             io.BytesIO(output.getvalue().encode('utf-8-sig')),
@@ -1616,7 +1315,17 @@ async def export_data():
 
 @app.get("/health")
 async def health_check():
-    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat(), "features": ["qr_codes", "analytics", "bulk_processing"]})
+    features = ["basic_analytics", "bulk_processing"]
+    if QR_AVAILABLE:
+        features.append("qr_codes")
+    if UA_AVAILABLE:
+        features.append("user_agent_analysis")
+    
+    return JSONResponse({
+        "status": "healthy", 
+        "timestamp": datetime.now().isoformat(), 
+        "features": features
+    })
 
 # リダイレクト処理（拡張分析対応）
 @app.get("/{short_code}")
@@ -1633,7 +1342,7 @@ async def redirect_url(short_code: str, request: Request):
         
         url_id, original_url = result
         
-        # 詳細分析データ収集
+        # 基本分析データ収集
         client_ip = request.client.host
         user_agent = request.headers.get("user-agent", "")
         referrer = request.headers.get("referer", "")
