@@ -1,415 +1,335 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkTrack Pro - URL短縮・分析プラットフォーム</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            font-weight: 300;
-        }
-        
-        .header p {
-            font-size: 1.2em;
-            opacity: 0.9;
-        }
-        
-        .main-content {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-        
-        .url-form {
-            background: #f8f9fa;
-            padding: 30px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            margin-left: 10px;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ffa726 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-        }
-        
-        .stat-card:nth-child(2) {
-            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
-        }
-        
-        .stat-card:nth-child(3) {
-            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-            color: #333;
-        }
-        
-        .stat-card:nth-child(4) {
-            background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%);
-            color: #333;
-        }
-        
-        .stat-number {
-            font-size: 2.5em;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        
-        .navigation {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .nav-link {
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 25px;
-            transition: background 0.3s;
-        }
-        
-        .nav-link:hover {
-            background: rgba(255,255,255,0.3);
-        }
-        
-        .result-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-            display: none;
-        }
-        
-        .result-success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-        
-        .result-error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
-        
-        .qr-code {
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .qr-code img {
-            max-width: 200px;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-        }
-        
-        .copy-button {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        
-        .footer {
-            text-align: center;
-            color: white;
-            margin-top: 30px;
-            opacity: 0.8;
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .main-content {
-                padding: 20px;
-            }
-            
-            .url-form {
-                padding: 20px;
-            }
-            
-            .navigation {
-                flex-direction: column;
-                align-items: center;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一括リンク生成システム</title>
+  <style>
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      margin: 20px; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container { 
+      max-width: 1400px; 
+      margin: 0 auto; 
+      background: white; 
+      padding: 30px; 
+      border-radius: 20px; 
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { 
+      color: #2c3e50; 
+      border-bottom: 4px solid #667eea; 
+      padding-bottom: 15px; 
+      margin-bottom: 25px;
+      font-size: 2.5em;
+    }
+    .instructions { 
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      padding: 20px; 
+      border-radius: 10px; 
+      margin: 25px 0; 
+      border-left: 5px solid #2196F3;
+    }
+    .action-buttons { 
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 12px; 
+      margin: 25px 0; 
+      justify-content: center;
+    }
+    .btn { 
+      padding: 12px 20px; 
+      border: none; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-size: 14px; 
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+      justify-content: center;
+    }
+    .btn:hover { 
+      transform: translateY(-2px); 
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+    .btn-generate { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; 
+      font-weight: bold;
+      font-size: 16px;
+      padding: 15px 30px;
+    }
+    .btn-admin { 
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white; 
+    }
+    .url-input-area {
+      margin: 30px 0;
+    }
+    textarea {
+      width: 100%;
+      min-height: 300px;
+      padding: 15px;
+      font-size: 14px;
+      font-family: monospace;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      resize: vertical;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+    .results-section { 
+      margin: 35px 0; 
+      display: none; 
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      border: 2px solid #e0e0e0;
+    }
+    .result-item { 
+      background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+      padding: 20px; 
+      margin: 15px 0; 
+      border-radius: 8px; 
+      border-left: 5px solid #28a745;
+      box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+    }
+    .error-item { 
+      background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+      border-left: 5px solid #dc3545;
+      padding: 20px;
+      margin: 15px 0;
+      border-radius: 8px;
+      color: #721c24;
+      box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+    }
+    .copy-btn { 
+      background: linear-gradient(135deg, #ffa000 0%, #ff6f00 100%);
+      color: white; 
+      border: none; 
+      padding: 8px 16px; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      margin-left: 12px; 
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .copy-btn:hover { 
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(255, 160, 0, 0.3);
+    }
+    .loading { 
+      text-align: center; 
+      padding: 30px; 
+      background: #f8f9fa;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+    .spinner { 
+      border: 4px solid #f3f3f3; 
+      border-top: 4px solid #667eea; 
+      border-radius: 50%; 
+      width: 40px; 
+      height: 40px; 
+      animation: spin 1s linear infinite; 
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { 
+      0% { transform: rotate(0deg); } 
+      100% { transform: rotate(360deg); } 
+    }
+    .short-url {
+      background: #f0f4ff;
+      padding: 10px 15px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 14px;
+      display: inline-block;
+      margin: 10px 0;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🔗 LinkTrack Pro</h1>
-            <p>マーケティング効果測定のためのURL短縮・分析プラットフォーム</p>
-        </div>
-        
-        <div class="navigation">
-            <a href="/" class="nav-link">🏠 ホーム</a>
-            <a href="/admin" class="nav-link">📊 管理ダッシュボード</a>
-            <a href="/bulk" class="nav-link">📦 一括生成</a>
-            <a href="/docs" class="nav-link">📚 API文書</a>
-        </div>
-        
-        <div class="main-content">
-            <!-- システム統計 -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">{{ stats.total_links }}</div>
-                    <div class="stat-label">総短縮URL数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{{ stats.total_clicks }}</div>
-                    <div class="stat-label">総クリック数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{{ stats.unique_visitors }}</div>
-                    <div class="stat-label">ユニーク訪問者</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">🟢</div>
-                    <div class="stat-label">{{ stats.system_status }}</div>
-                </div>
-            </div>
-            
-            <!-- URL短縮フォーム -->
-            <div class="url-form">
-                <h2>🚀 URL短縮サービス</h2>
-                <form id="shortenForm">
-                    <div class="form-group">
-                        <label for="url">短縮したいURL *</label>
-                        <input type="url" id="url" name="url" required 
-                               placeholder="https://example.com">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="custom_name">カスタム名（任意）</label>
-                        <input type="text" id="custom_name" name="custom_name" 
-                               placeholder="わかりやすい名前">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="campaign_name">キャンペーン名（任意）</label>
-                        <input type="text" id="campaign_name" name="campaign_name" 
-                               placeholder="マーケティングキャンペーン名">
-                    </div>
-                    
-                    <button type="submit" class="btn">🔗 短縮URLを生成</button>
-                    <button type="button" class="btn btn-secondary" onclick="clearForm()">🗑️ クリア</button>
-                </form>
-            </div>
-            
-            <!-- 結果表示エリア -->
-            <div id="resultSection" class="result-section">
-                <div id="resultContent"></div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p>© 2025 LinkTrack Pro - Powered by FastAPI & Render.com</p>
-            <p>Base URL: {{ base_url }}</p>
-        </div>
+  <div class="container">
+    <h1>🚀 一括URL短縮システム</h1>
+    
+    <div class="instructions">
+      <h3>📋 使い方</h3>
+      <ol>
+        <li>下のテキストエリアに短縮したいURLを入力（1行に1つ）</li>
+        <li>URLは必ず <strong>http://</strong> または <strong>https://</strong> で始めてください</li>
+        <li>「🚀 一括生成開始」ボタンをクリック</li>
+        <li>生成された短縮URLをコピーして使用</li>
+      </ol>
     </div>
 
-    <script>
-        // フォーム送信処理
-        document.getElementById('shortenForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            
-            // ローディング状態
-            submitButton.textContent = '🔄 処理中...';
-            submitButton.disabled = true;
-            
-            try {
-                const response = await fetch('/api/shorten-form', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    showResult(result, 'success');
-                } else {
-                    showResult({error: result.detail || '処理に失敗しました'}, 'error');
-                }
-            } catch (error) {
-                showResult({error: 'ネットワークエラーが発生しました'}, 'error');
-            } finally {
-                submitButton.textContent = originalText;
-                submitButton.disabled = false;
-            }
+    <div class="url-input-area">
+      <h3>URLを入力してください（1行に1つ）</h3>
+      <textarea id="urlInput" placeholder="https://example.com
+https://example.com/page1
+https://example.com/page2
+..."></textarea>
+    </div>
+
+    <div class="action-buttons">
+      <button type="button" class="btn btn-generate" id="generateBtn">🚀 一括生成開始</button>
+      <button type="button" class="btn btn-admin" id="adminBtn">📊 管理画面へ</button>
+    </div>
+
+    <div class="results-section" id="resultsArea">
+      <h2>📈 生成結果</h2>
+      <div id="resultsContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // 一括生成機能
+    async function startGeneration() {
+      const urlInput = document.getElementById('urlInput');
+      const urls = urlInput.value.trim();
+      
+      if (!urls) {
+        alert('URLを入力してください');
+        return;
+      }
+      
+      // URLの検証
+      const urlList = urls.split('\n').filter(url => url.trim());
+      for (let url of urlList) {
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          alert('すべてのURLは http:// または https:// で始める必要があります');
+          return;
+        }
+      }
+      
+      // ボタンを無効化
+      const generateBtn = document.getElementById('generateBtn');
+      generateBtn.disabled = true;
+      generateBtn.textContent = '⏳ 生成中...';
+      
+      // 結果エリアを表示
+      const resultsArea = document.getElementById('resultsArea');
+      const resultsContent = document.getElementById('resultsContent');
+      resultsArea.style.display = 'block';
+      resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>リンクを生成しています...</p></div>';
+      
+      try {
+        const formData = new FormData();
+        formData.append('urls', urls);
+        
+        const response = await fetch('/api/bulk-process', {
+          method: 'POST',
+          body: formData
         });
         
-        // 結果表示
-        function showResult(data, type) {
-            const section = document.getElementById('resultSection');
-            const content = document.getElementById('resultContent');
-            
-            section.className = `result-section result-${type}`;
-            section.style.display = 'block';
-            
-            if (type === 'success') {
-                content.innerHTML = `
-                    <h3>✅ 短縮URL生成完了</h3>
-                    <div style="margin: 15px 0;">
-                        <strong>短縮URL:</strong> 
-                        <span id="shortUrl">${data.short_url}</span>
-                        <button class="copy-button" onclick="copyToClipboard('${data.short_url}')">📋 コピー</button>
-                    </div>
-                    <div style="margin: 15px 0;">
-                        <strong>元のURL:</strong> ${data.original_url}
-                    </div>
-                    ${data.custom_name ? `<div><strong>カスタム名:</strong> ${data.custom_name}</div>` : ''}
-                    ${data.campaign_name ? `<div><strong>キャンペーン:</strong> ${data.campaign_name}</div>` : ''}
-                    <div class="qr-code">
-                        <p><strong>QRコード:</strong></p>
-                        <div style="padding: 20px; background: #f0f0f0; border-radius: 10px; text-align: center;">
-                            📱 QRコード機能<br>
-                            <small>（軽量版のため無効化中）</small>
-                        </div>
-                    </div>
-                    <div style="margin-top: 20px;">
-                        <a href="/analytics/${data.short_code}" class="btn">📈 分析ページ</a>
-                    </div>
-                `;
-            } else {
-                content.innerHTML = `
-                    <h3>❌ エラーが発生しました</h3>
-                    <p>${data.error}</p>
-                `;
-            }
-            
-            // 結果エリアまでスクロール
-            section.scrollIntoView({ behavior: 'smooth' });
+        if (!response.ok) {
+          throw new Error(`処理エラー: ${response.status}`);
         }
         
-        // クリップボードにコピー
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(function() {
-                alert('📋 クリップボードにコピーしました！');
-            }).catch(function() {
-                // フォールバック
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('📋 クリップボードにコピーしました！');
-            });
-        }
+        const result = await response.json();
+        showResults(result);
         
-        // フォームクリア
-        function clearForm() {
-            document.getElementById('shortenForm').reset();
-            document.getElementById('resultSection').style.display = 'none';
-        }
-        
-        // エラーメッセージ表示
-        {% if error %}
-        window.addEventListener('load', function() {
-            showResult({error: '{{ error }}'}, 'error');
+      } catch (error) {
+        resultsContent.innerHTML = `<div class="error-item">エラーが発生しました: ${error.message}</div>`;
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🚀 一括生成開始';
+      }
+    }
+    
+    // 結果表示
+    function showResults(result) {
+      const resultsContent = document.getElementById('resultsContent');
+      let successCount = 0;
+      let errorCount = 0;
+      
+      if (result.results) {
+        result.results.forEach(item => {
+          if (item.success) successCount++;
+          else errorCount++;
         });
-        {% endif %}
-    </script>
+      }
+      
+      let html = `
+        <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+          <h3 style="margin: 0 0 15px 0; color: #1976d2;">📊 生成結果サマリー</h3>
+          <p style="margin: 0; font-size: 16px;">
+            成功: <strong style="color: #28a745;">${successCount}</strong> | 
+            エラー: <strong style="color: #dc3545;">${errorCount}</strong> | 
+            合計: <strong>${successCount + errorCount}</strong>
+          </p>
+        </div>
+      `;
+      
+      if (result.results) {
+        result.results.forEach((item, index) => {
+          if (item.success) {
+            html += `
+              <div class="result-item">
+                <p style="margin: 0 0 12px 0;"><strong>${index + 1}. 元URL:</strong><br>${item.url}</p>
+                <p style="margin: 0;">
+                  <strong>短縮URL:</strong><br>
+                  <span class="short-url">${item.short_url}</span>
+                  <button class="copy-btn" onclick="copyText('${item.short_url}')">📋 コピー</button>
+                </p>
+              </div>
+            `;
+          } else {
+            html += `
+              <div class="error-item">
+                <p style="margin: 0;">❌ ${item.url}<br>エラー: ${item.error}</p>
+              </div>
+            `;
+          }
+        });
+      }
+      
+      resultsContent.innerHTML = html;
+    }
+    
+    // コピー機能
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // コピー成功の視覚的フィードバック
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✅ コピー完了！';
+        btn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
+        
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '';
+        }, 2000);
+      }).catch(() => {
+        prompt('以下のURLをコピーしてください:', text);
+      });
+    }
+    
+    // イベントリスナー
+    document.getElementById('generateBtn').addEventListener('click', startGeneration);
+    document.getElementById('adminBtn').addEventListener('click', function() {
+      window.location.href = '/admin';
+    });
+    
+    // Enterキーで送信を防ぐ
+    document.getElementById('urlInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        startGeneration();
+      }
+    });
+  </script>
 </body>
 </html>
