@@ -1,17 +1,15 @@
-# main.py - 高品質UI/UX統合版
-from fastapi import FastAPI, Request, HTTPException, Form, File, UploadFile
+from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import os
 import sqlite3
 from datetime import datetime
-import uvicorn
 import string
 import random
 import re
 
 # 設定
-BASE_URL = os.getenv("BASE_URL", "https://link-shortcut-flow-analysis.onrender.com")
-DB_PATH = os.getenv("DB_PATH", "url_shortener.db")
+BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+DB_PATH = "url_shortener.db"
 
 # データベース初期化
 def init_db():
@@ -59,7 +57,7 @@ def generate_short_code(length=6):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    for _ in range(50):  # 最大50回試行
+    for _ in range(50):
         code = ''.join(random.choices(chars, k=length))
         cursor.execute("SELECT 1 FROM urls WHERE short_code = ?", (code,))
         if not cursor.fetchone():
@@ -71,16 +69,13 @@ def generate_short_code(length=6):
 
 def validate_url(url):
     pattern = re.compile(
-        r'^https?://'  # http:// or https://
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
-        r'localhost|'  # localhost...
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-        r'(?::\d+)?'  # optional port
+        r'^https?://'
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'
+        r'localhost|'
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
+        r'(?::\d+)?'
         r'(?:/?|[/?]\S+)$', re.IGNORECASE)
     return bool(pattern.match(url))
-
-def clean_url(url):
-    return url.strip()
 
 # データベース初期化
 init_db()
@@ -92,89 +87,79 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 高品質HTMLテンプレート
+# ホームページHTML
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkTrack Pro - URL短縮・分析プラットフォーム</title>
+    <title>LinkTrack Pro - URL短縮サービス</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6; color: #333;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-        }}
-        .container {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
-        .header {{ text-align: center; color: white; margin-bottom: 30px; }}
-        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }}
-        .header p {{ font-size: 1.2em; opacity: 0.9; }}
-        .main-content {{
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        .main-content {
             background: white; border-radius: 20px; padding: 40px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1); margin-bottom: 30px;
-        }}
-        .stats-grid {{
+        }
+        .stats-grid {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px; margin-bottom: 30px;
-        }}
-        .stat-card {{
+        }
+        .stat-card {
             background: linear-gradient(135deg, #ff6b6b 0%, #ffa726 100%);
             color: white; padding: 20px; border-radius: 15px; text-align: center;
             transition: transform 0.3s ease;
-        }}
-        .stat-card:hover {{ transform: translateY(-5px); }}
-        .stat-card:nth-child(2) {{ background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }}
-        .stat-card:nth-child(3) {{ background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }}
-        .stat-card:nth-child(4) {{ background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%); color: #333; }}
-        .stat-number {{ font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }}
-        .stat-label {{ font-size: 1.1em; opacity: 0.9; }}
-        .navigation {{ display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }}
-        .nav-link {{
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-card:nth-child(2) { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }
+        .stat-card:nth-child(3) { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }
+        .stat-number { font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 1.1em; opacity: 0.9; }
+        .navigation { display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }
+        .nav-link {
             color: white; text-decoration: none; padding: 10px 20px;
             background: rgba(255,255,255,0.2); border-radius: 25px; transition: all 0.3s;
-        }}
-        .nav-link:hover {{ background: rgba(255,255,255,0.3); transform: translateY(-2px); }}
-        .url-form {{ background: #f8f9fa; padding: 30px; border-radius: 15px; margin-bottom: 30px; }}
-        .form-group {{ margin-bottom: 20px; }}
-        .form-group label {{ display: block; margin-bottom: 8px; font-weight: 600; color: #555; }}
-        .form-group input {{ 
+        }
+        .nav-link:hover { background: rgba(255,255,255,0.3); transform: translateY(-2px); }
+        .url-form { background: #f8f9fa; padding: 30px; border-radius: 15px; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        .form-group input { 
             width: 100%; padding: 12px 15px; border: 2px solid #e1e5e9; 
             border-radius: 8px; font-size: 16px; transition: border-color 0.3s;
-        }}
-        .form-group input:focus {{ outline: none; border-color: #667eea; }}
-        .btn {{
+        }
+        .form-group input:focus { outline: none; border-color: #667eea; }
+        .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; padding: 12px 30px; border: none; border-radius: 8px;
             font-size: 16px; font-weight: 600; cursor: pointer; 
             transition: all 0.3s; text-decoration: none; display: inline-block;
-        }}
-        .btn:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }}
-        .btn-secondary {{ background: linear-gradient(135deg, #6c757d 0%, #495057 100%); margin-left: 10px; }}
-        .btn-success {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }}
-        .btn-warning {{ background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }}
-        .result-section {{ 
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        .btn-secondary { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); margin-left: 10px; }
+        .result-section { 
             background: #f8f9fa; padding: 20px; border-radius: 10px; 
             margin-top: 20px; display: none; animation: fadeIn 0.5s;
-        }}
-        .result-success {{ background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }}
-        .result-error {{ background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }}
-        .copy-button {{ 
+        }
+        .result-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .result-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .copy-button { 
             background: #28a745; color: white; border: none; padding: 8px 16px; 
             border-radius: 5px; cursor: pointer; margin-left: 10px; transition: all 0.3s;
-        }}
-        .copy-button:hover {{ background: #218838; }}
-        .footer {{ text-align: center; color: white; margin-top: 30px; opacity: 0.8; }}
-        @keyframes fadeIn {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
-        .loading {{ text-align: center; padding: 20px; }}
-        .spinner {{ 
-            border: 4px solid #f3f3f3; border-top: 4px solid #3498db; 
-            border-radius: 50%; width: 40px; height: 40px; 
-            animation: spin 2s linear infinite; margin: 0 auto;
-        }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        }
+        .copy-button:hover { background: #218838; }
+        .footer { text-align: center; color: white; margin-top: 30px; opacity: 0.8; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -205,10 +190,6 @@ INDEX_HTML = """
                     <div class="stat-number">{unique_visitors}</div>
                     <div class="stat-label">ユニーク訪問者</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-number">🟢</div>
-                    <div class="stat-label">{system_status}</div>
-                </div>
             </div>
             
             <div class="url-form">
@@ -238,12 +219,11 @@ INDEX_HTML = """
         
         <div class="footer">
             <p>© 2025 LinkTrack Pro - Powered by FastAPI & Render.com</p>
-            <p>Base URL: {base_url}</p>
         </div>
     </div>
 
     <script>
-        document.getElementById('shortenForm').addEventListener('submit', async function(e) {{
+        document.getElementById('shortenForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const formData = new FormData(this);
             const submitButton = this.querySelector('button[type="submit"]');
@@ -252,64 +232,64 @@ INDEX_HTML = """
             submitButton.textContent = '🔄 処理中...';
             submitButton.disabled = true;
             
-            try {{
-                const response = await fetch('/api/shorten-form', {{
+            try {
+                const response = await fetch('/api/shorten-form', {
                     method: 'POST',
                     body: formData
-                }});
+                });
                 
                 const result = await response.json();
                 
-                if (response.ok) {{
+                if (response.ok) {
                     showResult(result, 'success');
-                }} else {{
-                    showResult({{error: result.detail || '処理に失敗しました'}}, 'error');
-                }}
-            }} catch (error) {{
-                showResult({{error: 'ネットワークエラーが発生しました'}}, 'error');
-            }} finally {{
+                } else {
+                    showResult({error: result.detail || '処理に失敗しました'}, 'error');
+                }
+            } catch (error) {
+                showResult({error: 'ネットワークエラーが発生しました'}, 'error');
+            } finally {
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
-            }}
-        }});
+            }
+        });
         
-        function showResult(data, type) {{
+        function showResult(data, type) {
             const section = document.getElementById('resultSection');
             const content = document.getElementById('resultContent');
             
-            section.className = `result-section result-${{type}}`;
+            section.className = `result-section result-${type}`;
             section.style.display = 'block';
             
-            if (type === 'success') {{
+            if (type === 'success') {
                 content.innerHTML = `
                     <h3>✅ 短縮URL生成完了</h3>
                     <div style="margin: 15px 0;">
                         <strong>短縮URL:</strong> 
-                        <span id="shortUrl">${{data.short_url}}</span>
-                        <button class="copy-button" onclick="copyToClipboard('${{data.short_url}}')">📋 コピー</button>
+                        <span id="shortUrl">${data.short_url}</span>
+                        <button class="copy-button" onclick="copyToClipboard('${data.short_url}')">📋 コピー</button>
                     </div>
                     <div style="margin: 15px 0;">
-                        <strong>元のURL:</strong> ${{data.original_url}}
+                        <strong>元のURL:</strong> ${data.original_url}
                     </div>
-                    ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
-                    ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
+                    ${data.custom_name ? `<div><strong>カスタム名:</strong> ${data.custom_name}</div>` : ''}
+                    ${data.campaign_name ? `<div><strong>キャンペーン:</strong> ${data.campaign_name}</div>` : ''}
                     <div style="margin-top: 20px;">
-                        <a href="/analytics/${{data.short_code}}" class="btn btn-success">📈 分析ページ</a>
+                        <a href="/analytics/${data.short_code}" class="btn">📈 分析ページ</a>
                     </div>
                 `;
-            }} else {{
+            } else {
                 content.innerHTML = `
                     <h3>❌ エラーが発生しました</h3>
-                    <p>${{data.error}}</p>
+                    <p>${data.error}</p>
                 `;
-            }}
-            section.scrollIntoView({{ behavior: 'smooth' }});
-        }}
+            }
+            section.scrollIntoView({ behavior: 'smooth' });
+        }
         
-        function copyToClipboard(text) {{
-            navigator.clipboard.writeText(text).then(function() {{
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
                 alert('📋 クリップボードにコピーしました！');
-            }}).catch(function() {{
+            }).catch(function() {
                 const textArea = document.createElement('textarea');
                 textArea.value = text;
                 document.body.appendChild(textArea);
@@ -317,19 +297,19 @@ INDEX_HTML = """
                 document.execCommand('copy');
                 document.body.removeChild(textArea);
                 alert('📋 クリップボードにコピーしました！');
-            }});
-        }}
+            });
+        }
         
-        function clearForm() {{
+        function clearForm() {
             document.getElementById('shortenForm').reset();
             document.getElementById('resultSection').style.display = 'none';
-        }}
+        }
     </script>
 </body>
 </html>
 """
 
-# 高品質管理画面HTML
+# 管理画面HTML（文書2から最良部分を採用）
 ADMIN_HTML = """
 <!DOCTYPE html>
 <html>
@@ -337,27 +317,25 @@ ADMIN_HTML = """
     <title>管理画面 - LinkTrack Pro</title>
     <meta charset="UTF-8">
     <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }}
-        .stat-card {{ background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }}
-        .stat-number {{ font-size: 2.5em; font-weight: bold; color: #4CAF50; }}
-        .stat-label {{ color: #666; margin-top: 10px; font-weight: bold; }}
-        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-        th {{ background: #4CAF50; color: white; }}
-        tr:hover {{ background: #f5f5f5; }}
-        .action-btn {{ 
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+        .stat-number { font-size: 2.5em; font-weight: bold; color: #4CAF50; }
+        .stat-label { color: #666; margin-top: 10px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #4CAF50; color: white; }
+        tr:hover { background: #f5f5f5; }
+        .action-btn { 
             padding: 5px 10px; margin: 2px; border: none; border-radius: 3px; 
             cursor: pointer; text-decoration: none; display: inline-block; color: white;
-        }}
-        .analytics-btn {{ background: #2196F3; }}
-        .qr-btn {{ background: #FF9800; }}
-        .export-btn {{ background: #4CAF50; }}
-        .refresh-btn {{ background: #9C27B0; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 0; }}
-        .nav-buttons {{ text-align: center; margin: 20px 0; }}
-        .nav-buttons a {{ margin: 0 10px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }}
+        }
+        .analytics-btn { background: #2196F3; }
+        .refresh-btn { background: #9C27B0; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 0; }
+        .nav-buttons { text-align: center; margin: 20px 0; }
+        .nav-buttons a { margin: 0 10px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -384,10 +362,6 @@ ADMIN_HTML = """
                 <div class="stat-number">{unique_clicks}</div>
                 <div class="stat-label">ユニーク訪問者</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">{qr_clicks}</div>
-                <div class="stat-label">QRコードクリック</div>
-            </div>
         </div>
 
         <h2>📋 URL一覧</h2>
@@ -400,7 +374,6 @@ ADMIN_HTML = """
                     <th>キャンペーン</th>
                     <th>作成日</th>
                     <th>クリック数</th>
-                    <th>ユニーク</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -413,322 +386,470 @@ ADMIN_HTML = """
 </html>
 """
 
-# ローカル風高品質一括生成HTML（ボタン修正版）
+# 一括生成HTML（文書1の最良UIを採用）
 BULK_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>一括リンク生成システム</title>
+    <title>一括リンク生成 - LinkTracker Pro</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; display: flex; align-items: center; }}
-        h1::before {{ content: '🚀'; margin-right: 10px; }}
-        .instructions {{ background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-        .instructions h3 {{ margin-bottom: 15px; display: flex; align-items: center; }}
-        .instructions h3::before {{ content: '📋'; margin-right: 8px; }}
-        .action-buttons {{ text-align: center; margin: 20px 0; }}
-        .btn {{ 
-            padding: 8px 16px; margin: 3px; border: none; border-radius: 4px; 
-            cursor: pointer; font-size: 13px; font-weight: 500;
-            transition: all 0.2s ease;
-        }}
-        .btn:hover {{ transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }}
-        .btn-add {{ background: #2196F3; color: white; }}
-        .btn-clear {{ background: #FF9800; color: white; }}
-        .btn-generate {{ background: #f44336; color: white; font-weight: bold; }}
-        .btn-admin {{ background: #4CAF50; color: white; }}
-        .spreadsheet-container {{ margin: 20px 0; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }}
-        .spreadsheet-table {{ width: 100%; border-collapse: collapse; min-width: 1400px; }}
-        .spreadsheet-table th {{ 
-            background: #4CAF50; color: white; text-align: center; 
-            padding: 12px 8px; border: 1px solid #45a049; font-weight: 600;
-        }}
-        .spreadsheet-table td {{ border: 1px solid #ddd; padding: 4px; }}
-        .spreadsheet-table input {{ 
-            width: 100%; border: none; padding: 8px 6px; font-size: 13px;
-            outline: none; background: transparent;
-        }}
-        .spreadsheet-table input:focus {{ background: #fff3cd; }}
-        .row-number {{ background: #f8f9fa; text-align: center; font-weight: bold; width: 60px; }}
-        .delete-btn {{ 
-            background: #dc3545; color: white; border: none; 
-            padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;
-        }}
-        .results-section {{ margin: 30px 0; display: none; }}
-        .result-item {{ 
-            background: #d4edda; padding: 15px; margin: 10px 0; 
-            border-radius: 5px; border-left: 4px solid #28a745; 
-        }}
-        .error-item {{ background: #f8d7da; border-left: 4px solid #dc3545; color: #721c24; }}
-        .copy-btn {{ 
-            background: #fd7e14; color: white; border: none; 
-            padding: 4px 8px; border-radius: 3px; cursor: pointer; margin-left: 8px; 
-        }}
-        .loading {{ text-align: center; padding: 20px; }}
-        .spinner {{ 
-            border: 3px solid #f3f3f3; border-top: 3px solid #4CAF50; 
-            border-radius: 50%; width: 30px; height: 30px; 
-            animation: spin 1s linear infinite; margin: 0 auto; 
-        }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { 
+            max-width: 1800px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 15px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { 
+            font-size: 2.5em; 
+            margin-bottom: 10px; 
+            font-weight: 300; 
+        }
+        .header p { 
+            font-size: 1.2em; 
+            opacity: 0.9; 
+        }
+        .content {
+            padding: 40px;
+        }
+        .instructions { 
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            padding: 25px; 
+            border-radius: 10px; 
+            margin-bottom: 30px;
+            border-left: 5px solid #28a745;
+        }
+        .action-buttons { 
+            text-align: center; 
+            margin: 30px 0;
+        }
+        .btn { 
+            padding: 12px 24px; 
+            margin: 5px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .btn-primary { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; }
+        .btn-secondary { background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; }
+        .btn-warning { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); color: white; }
+        .btn-danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; }
+        
+        .spreadsheet-container { 
+            margin: 30px 0; 
+            border: 3px solid #28a745;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.15);
+        }
+        .spreadsheet-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-size: 14px;
+            background: white;
+        }
+        .spreadsheet-table th { 
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white; 
+            padding: 15px 10px;
+            text-align: center; 
+            font-weight: 600;
+            font-size: 13px;
+            border-right: 1px solid rgba(255,255,255,0.2);
+        }
+        .spreadsheet-table td { 
+            border: 1px solid #e0e0e0; 
+            padding: 8px;
+            vertical-align: middle;
+        }
+        .spreadsheet-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        .spreadsheet-table tr:hover {
+            background: #e8f5e9;
+        }
+        
+        .row-number { 
+            width: 60px; 
+            text-align: center; 
+            font-weight: bold;
+            background: #f8f9fa !important;
+            color: #495057;
+        }
+        .url-column { width: 45%; }
+        .custom-name-column { width: 15%; }
+        .campaign-column { width: 15%; }
+        .action-column { width: 15%; text-align: center; }
+        
+        .spreadsheet-table input { 
+            width: 100%; 
+            border: 2px solid #e9ecef; 
+            padding: 8px 10px; 
+            border-radius: 6px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .spreadsheet-table input:focus { 
+            border-color: #28a745; 
+            outline: none; 
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+        }
+        .url-input {
+            font-family: monospace;
+        }
+        .required { 
+            border-left: 4px solid #dc3545 !important; 
+        }
+        
+        .delete-row-btn { 
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white; 
+            border: none; 
+            padding: 6px 12px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .delete-row-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 10px rgba(220, 53, 69, 0.3);
+        }
+        
+        .results-section { 
+            margin: 40px 0;
+            border-top: 3px solid #28a745;
+            padding-top: 30px;
+        }
+        .result-item { 
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            padding: 20px; 
+            margin: 15px 0; 
+            border-radius: 10px; 
+            border-left: 5px solid #28a745;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        .error-item { 
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border-left: 5px solid #dc3545; 
+        }
+        .copy-btn { 
+            background: linear-gradient(135deg, #fd7e14 0%, #e55100 100%);
+            color: white; 
+            border: none; 
+            padding: 6px 12px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin-left: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .copy-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(253, 126, 20, 0.3);
+        }
+        
+        .loading { 
+            text-align: center; 
+            padding: 30px; 
+        }
+        .spinner { 
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #28a745; 
+            border-radius: 50%; 
+            width: 50px; 
+            height: 50px; 
+            animation: spin 1s linear infinite; 
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>一括リンク生成システム</h1>
+        <div class="header">
+            <h1>🚀 一括リンク生成システム</h1>
+            <p>効率的なURL短縮・管理プラットフォーム</p>
+        </div>
         
-        <div class="instructions">
-            <h3>使い方</h3>
-            <ol>
-                <li><strong>B列（必須）</strong>: 短縮したい元のURLを入力（http:// または https:// で始めてください）</li>
-                <li><strong>C列（任意）</strong>: カスタム短縮コードを入力（空白の場合は自動生成）</li>
-                <li><strong>D列（任意）</strong>: カスタム名を入力（管理画面で識別しやすくします）</li>
-                <li><strong>E列（任意）</strong>: キャンペーン名を入力（同じキャンペーンのURLをグループ化）</li>
-                <li><strong>F列（任意）</strong>: 生成数量を入力（空白の場合は1個生成）</li>
-                <li><strong>「🚀 一括生成開始」</strong>ボタンをクリック</li>
-            </ol>
-        </div>
+        <div class="content">
+            <div class="instructions">
+                <h3>📋 操作ガイド</h3>
+                <ol>
+                    <li><strong>B列（オリジナルURL）</strong>: 短縮したい元のURLを入力してください（http:// または https:// で始めること）</li>
+                    <li><strong>C列（カスタム名）</strong>: 管理しやすい名前を入力してください</li>
+                    <li><strong>D列（キャンペーン名）</strong>: マーケティングキャンペーンのグループ名を入力</li>
+                    <li><strong>「🚀 一括生成開始」</strong>ボタンをクリックして処理を実行</li>
+                </ol>
+            </div>
 
-        <div class="action-buttons">
-            <button type="button" class="btn btn-add" onclick="addRows(1)">➕ 1行追加</button>
-            <button type="button" class="btn btn-add" onclick="addRows(5)">➕ 5行追加</button>
-            <button type="button" class="btn btn-add" onclick="addRows(10)">➕ 10行追加</button>
-            <button type="button" class="btn btn-clear" onclick="clearAllData()">🗑️ 全削除</button>
-            <button type="button" class="btn btn-generate" onclick="startGeneration()">🚀 一括生成開始</button>
-            <button type="button" class="btn btn-admin" onclick="location.href='/admin'">📊 管理画面へ</button>
-        </div>
+            <div class="action-buttons">
+                <button class="btn btn-secondary" id="addRowBtn">➕ 1行追加</button>
+                <button class="btn btn-secondary" id="add5RowsBtn">➕ 5行追加</button>
+                <button class="btn btn-warning" id="clearAllBtn">🗑️ 全クリア</button>
+                <button class="btn btn-danger" id="generateBtn">🚀 一括生成開始</button>
+                <button class="btn btn-primary" onclick="window.location.href='/admin'">📊 管理画面へ</button>
+            </div>
 
-        <div class="spreadsheet-container">
-            <table class="spreadsheet-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px;">A<br>行番号</th>
-                        <th style="width: 35%;">B<br>オリジナルURL ※必須</th>
-                        <th style="width: 12%;">C<br>カスタム短縮コード<br>(任意)</th>
-                        <th style="width: 12%;">D<br>カスタム名<br>(任意)</th>
-                        <th style="width: 12%;">E<br>キャンペーン名<br>(任意)</th>
-                        <th style="width: 8%;">F<br>生成数量<br>(任意)</th>
-                        <th style="width: 11%;">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="dataTable">
-                    <tr>
-                        <td class="row-number">1</td>
-                        <td><input type="url" placeholder="https://example.com" /></td>
-                        <td><input type="text" placeholder="例: product01" /></td>
-                        <td><input type="text" placeholder="例: 商品A" /></td>
-                        <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                        <td><input type="number" min="1" max="20" value="1" /></td>
-                        <td><button class="delete-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+            <div class="spreadsheet-container">
+                <table class="spreadsheet-table" id="spreadsheetTable">
+                    <thead>
+                        <tr>
+                            <th class="row-number">A<br>行番号</th>
+                            <th class="url-column">B<br>オリジナルURL ※必須</th>
+                            <th class="custom-name-column">C<br>カスタム名<br>（任意）</th>
+                            <th class="campaign-column">D<br>キャンペーン名<br>（任意）</th>
+                            <th class="action-column">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="spreadsheetBody">
+                        <tr>
+                            <td class="row-number">1</td>
+                            <td><input type="url" class="required url-input" placeholder="https://example.com" required /></td>
+                            <td><input type="text" placeholder="商品A" /></td>
+                            <td><input type="text" placeholder="春キャンペーン" /></td>
+                            <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-        <div class="action-buttons">
-            <button type="button" class="btn btn-add" onclick="addRows(1)">➕ 1行追加</button>
-            <button type="button" class="btn btn-add" onclick="addRows(5)">➕ 5行追加</button>
-            <button type="button" class="btn btn-add" onclick="addRows(10)">➕ 10行追加</button>
-            <button type="button" class="btn btn-clear" onclick="clearAllData()">🗑️ 全削除</button>
-            <button type="button" class="btn btn-generate" onclick="startGeneration()">🚀 一括生成開始</button>
-        </div>
-
-        <div class="results-section" id="resultsArea">
-            <h2>📈 生成結果</h2>
-            <div id="resultsContent"></div>
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <h2>📈 生成結果</h2>
+                <div id="resultsContent"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        let rowCount = 1;
+        let rowCounter = 1;
         
-        // 行追加機能
-        function addRows(count) {{
-            const table = document.getElementById('dataTable');
-            
-            for (let i = 0; i < count; i++) {{
-                rowCount++;
-                const newRow = table.insertRow();
-                newRow.innerHTML = `
-                    <td class="row-number">${{rowCount}}</td>
-                    <td><input type="url" placeholder="https://example.com" /></td>
-                    <td><input type="text" placeholder="例: product${{rowCount.toString().padStart(2, '0')}}" /></td>
-                    <td><input type="text" placeholder="例: 商品${{String.fromCharCode(65 + (rowCount % 26))}}" /></td>
-                    <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                    <td><input type="number" min="1" max="20" value="1" /></td>
-                    <td><button class="delete-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
-                `;
-            }}
+        function addRow() {
+            rowCounter++;
+            const tbody = document.getElementById('spreadsheetBody');
+            const newRow = tbody.insertRow();
+            newRow.innerHTML = `
+                <td class="row-number">${rowCounter}</td>
+                <td><input type="url" class="required url-input" placeholder="https://example${rowCounter}.com" required /></td>
+                <td><input type="text" placeholder="商品${String.fromCharCode(64 + rowCounter)}" /></td>
+                <td><input type="text" placeholder="キャンペーン${rowCounter}" /></td>
+                <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
+            `;
             updateRowNumbers();
-        }}
+        }
         
-        // 行削除機能
-        function deleteRow(button) {{
-            const table = document.getElementById('dataTable');
-            if (table.rows.length > 1) {{
+        function addMultipleRows(count) {
+            for (let i = 0; i < count; i++) {
+                addRow();
+            }
+        }
+        
+        function removeRow(button) {
+            const tbody = document.getElementById('spreadsheetBody');
+            if (tbody.rows.length > 1) {
                 button.closest('tr').remove();
                 updateRowNumbers();
-            }} else {{
+            } else {
                 alert('最低1行は必要です');
-            }}
-        }}
+            }
+        }
         
-        // 行番号更新
-        function updateRowNumbers() {{
-            const table = document.getElementById('dataTable');
-            for (let i = 0; i < table.rows.length; i++) {{
-                table.rows[i].cells[0].textContent = i + 1;
-            }}
-            rowCount = table.rows.length;
-        }}
+        function updateRowNumbers() {
+            const rows = document.querySelectorAll('#spreadsheetBody tr');
+            rows.forEach((row, index) => {
+                row.cells[0].textContent = index + 1;
+            });
+            rowCounter = rows.length;
+        }
         
-        // 全削除機能
-        function clearAllData() {{
-            if (confirm('全てのデータを削除しますか？')) {{
-                const table = document.getElementById('dataTable');
-                table.innerHTML = `
+        function clearAll() {
+            if (confirm('全てのデータを削除しますか？')) {
+                document.getElementById('spreadsheetBody').innerHTML = `
                     <tr>
                         <td class="row-number">1</td>
-                        <td><input type="url" placeholder="https://example.com" /></td>
-                        <td><input type="text" placeholder="例: product01" /></td>
-                        <td><input type="text" placeholder="例: 商品A" /></td>
-                        <td><input type="text" placeholder="例: 春キャンペーン" /></td>
-                        <td><input type="number" min="1" max="20" value="1" /></td>
-                        <td><button class="delete-btn" onclick="deleteRow(this)">🗑️ 削除</button></td>
+                        <td><input type="url" class="required url-input" placeholder="https://example.com" required /></td>
+                        <td><input type="text" placeholder="商品A" /></td>
+                        <td><input type="text" placeholder="春キャンペーン" /></td>
+                        <td><button class="delete-row-btn" onclick="removeRow(this)">🗑️ 削除</button></td>
                     </tr>
                 `;
-                rowCount = 1;
-                document.getElementById('resultsArea').style.display = 'none';
-            }}
-        }}
+                rowCounter = 1;
+                document.getElementById('resultsSection').style.display = 'none';
+            }
+        }
         
-        // 一括生成機能
-        async function startGeneration() {{
-            const table = document.getElementById('dataTable');
-            const urlList = [];
+        async function validateAndGenerate() {
+            const rows = document.querySelectorAll('#spreadsheetBody tr');
+            const data = [];
+            let hasError = false;
             
-            // データ収集
-            for (let i = 0; i < table.rows.length; i++) {{
-                const row = table.rows[i];
-                const url = row.cells[1].querySelector('input').value.trim();
+            for (let row of rows) {
+                const inputs = row.querySelectorAll('input');
+                const originalUrl = inputs[0].value.trim();
+                const customName = inputs[1].value.trim();
+                const campaignName = inputs[2].value.trim();
                 
-                if (url) {{
-                    if (!url.startsWith('http://') && !url.startsWith('https://')) {{
-                        alert(`行 ${{i + 1}}: URLは http:// または https:// で始めてください`);
-                        return;
-                    }}
-                    urlList.push(url);
-                }}
-            }}
+                if (originalUrl) {
+                    if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {
+                        alert('URLは http:// または https:// で始めてください');
+                        inputs[0].focus();
+                        hasError = true;
+                        break;
+                    }
+                    
+                    data.push({
+                        url: originalUrl,
+                        custom_name: customName || null,
+                        campaign_name: campaignName || null
+                    });
+                }
+            }
             
-            if (urlList.length === 0) {{
+            if (hasError) return;
+            
+            if (data.length === 0) {
                 alert('少なくとも1つのURLを入力してください');
                 return;
-            }}
+            }
             
-            // 生成処理
-            const generateBtns = document.querySelectorAll('.btn-generate');
-            generateBtns.forEach(btn => {{
-                btn.disabled = true;
-                btn.textContent = '⏳ 生成中...';
-            }});
-            
-            const resultsArea = document.getElementById('resultsArea');
+            generateLinks(data);
+        }
+        
+        async function generateLinks(data) {
+            const btn = document.getElementById('generateBtn');
+            const resultsSection = document.getElementById('resultsSection');
             const resultsContent = document.getElementById('resultsContent');
-            resultsArea.style.display = 'block';
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ 生成中...';
+            
+            resultsSection.style.display = 'block';
             resultsContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>リンクを生成しています...</p></div>';
             
-            try {{
+            try {
                 const formData = new FormData();
-                formData.append('urls', urlList.join('\\n'));
+                const urlList = data.map(item => item.url).join('\\n');
+                formData.append('urls', urlList);
                 
-                const response = await fetch('/api/bulk-process', {{
+                const response = await fetch('/api/bulk-process', {
                     method: 'POST',
                     body: formData
-                }});
+                });
                 
-                if (!response.ok) {{
-                    throw new Error(`処理エラー: ${{response.status}}`);
-                }}
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 
                 const result = await response.json();
-                showResults(result);
+                displayResults(result);
                 
-            }} catch (error) {{
-                resultsContent.innerHTML = `<div class="error-item">エラーが発生しました: ${{error.message}}</div>`;
-            }} finally {{
-                generateBtns.forEach(btn => {{
-                    btn.disabled = false;
-                    btn.textContent = '🚀 一括生成開始';
-                }});
-            }}
-        }}
+            } catch (error) {
+                resultsContent.innerHTML = `<div class="error-item">エラー: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '🚀 一括生成開始';
+            }
+        }
         
-        // 結果表示
-        function showResults(result) {{
+        function displayResults(result) {
             const resultsContent = document.getElementById('resultsContent');
+            
             let successCount = 0;
             let errorCount = 0;
             
-            if (result.results) {{
-                result.results.forEach(item => {{
+            if (result.results) {
+                result.results.forEach(item => {
                     if (item.success) successCount++;
                     else errorCount++;
-                }});
-            }}
+                });
+            }
             
             let html = `
-                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                    <h3>📊 生成結果サマリー</h3>
-                    <p>成功: <strong>${{successCount}}</strong> | エラー: <strong>${{errorCount}}</strong> | 合計: <strong>${{successCount + errorCount}}</strong></p>
+                <div style="background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%); padding: 20px; border-radius: 10px; margin-bottom: 25px; border-left: 5px solid #1976d2;">
+                    <h3>📊 生成サマリー</h3>
+                    <p style="font-size: 1.1em; margin-top: 10px;">成功: <strong style="color: #28a745;">${successCount}</strong> | エラー: <strong style="color: #dc3545;">${errorCount}</strong> | 総生成数: <strong>${successCount + errorCount}</strong></p>
                 </div>
             `;
             
-            if (result.results) {{
-                result.results.forEach((item, index) => {{
-                    if (item.success) {{
+            if (result.results && result.results.length > 0) {
+                html += '<h3 style="color: #28a745; margin-bottom: 20px;">✅ 生成成功</h3>';
+                result.results.forEach((item, index) => {
+                    if (item.success) {
                         html += `
                             <div class="result-item">
-                                <p><strong>${{index + 1}}. 元URL:</strong> ${{item.url}}</p>
+                                <p><strong>${index + 1}. 元URL:</strong> <a href="${item.url}" target="_blank">${item.url}</a></p>
                                 <p><strong>短縮URL:</strong> 
-                                    <a href="${{item.short_url}}" target="_blank">${{item.short_url}}</a>
-                                    <button class="copy-btn" onclick="copyText('${{item.short_url}}')">📋 コピー</button>
+                                    <a href="${item.short_url}" target="_blank" style="color: #1976d2; font-weight: bold;">${item.short_url}</a>
+                                    <button class="copy-btn" onclick="copyToClipboard('${item.short_url}')">📋 コピー</button>
                                 </p>
                             </div>
                         `;
-                    }} else {{
-                        html += `<div class="error-item">❌ ${{item.url}} - ${{item.error}}</div>`;
-                    }}
-                }});
-            }}
+                    }
+                });
+                
+                const errors = result.results.filter(item => !item.success);
+                if (errors.length > 0) {
+                    html += '<h3 style="color: #dc3545; margin: 30px 0 20px;">❌ エラー</h3>';
+                    errors.forEach(item => {
+                        html += `<div class="error-item"><strong>URL:</strong> ${item.url}<br><strong>エラー:</strong> ${item.error}</div>`;
+                    });
+                }
+            }
             
             resultsContent.innerHTML = html;
-        }}
+        }
         
-        // コピー機能
-        function copyText(text) {{
-            navigator.clipboard.writeText(text).then(() => {{
-                alert(`クリップボードにコピーしました: ${{text}}`);
-            }}).catch(() => {{
-                prompt('以下のURLをコピーしてください:', text);
-            }});
-        }}
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('クリップボードにコピーしました: ' + text);
+            });
+        }
         
-        // 初期化
-        window.addEventListener('load', function() {{
-            console.log('一括生成システム準備完了');
-            // 初期表示で4行追加
-            addRows(4);
-        }});
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('addRowBtn').addEventListener('click', addRow);
+            document.getElementById('add5RowsBtn').addEventListener('click', () => addMultipleRows(5));
+            document.getElementById('clearAllBtn').addEventListener('click', clearAll);
+            document.getElementById('generateBtn').addEventListener('click', validateAndGenerate);
+            
+            // 初期化で追加行を作成
+            addMultipleRows(4);
+        });
     </script>
 </body>
 </html>
 """
 
-# ルート定義
-
+# ルートエンドポイント
 @app.get("/", response_class=HTMLResponse)
 async def root():
     try:
@@ -749,15 +870,12 @@ async def root():
         html_content = INDEX_HTML.format(
             total_links=total_links,
             total_clicks=total_clicks,
-            unique_visitors=unique_visitors,
-            system_status="正常稼働中",
-            base_url=BASE_URL
+            unique_visitors=unique_visitors
         )
         return HTMLResponse(content=html_content)
     except:
         html_content = INDEX_HTML.format(
-            total_links=0, total_clicks=0, unique_visitors=0,
-            system_status="初期化中", base_url=BASE_URL
+            total_links=0, total_clicks=0, unique_visitors=0
         )
         return HTMLResponse(content=html_content)
 
@@ -767,28 +885,26 @@ async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campai
         if not validate_url(url):
             raise HTTPException(status_code=400, detail="無効なURLです")
         
-        # 短縮コード生成
         short_code = generate_short_code()
         
-        # 保存
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO urls (short_code, original_url, custom_name, campaign_name, created_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (short_code, clean_url(url), custom_name or None, campaign_name or None, datetime.now().isoformat()))
+        """, (short_code, url.strip(), custom_name or None, campaign_name or None, datetime.now().isoformat()))
         
         conn.commit()
         conn.close()
         
-        return JSONResponse({{
+        return JSONResponse({
             "success": True,
             "short_code": short_code,
             "short_url": f"{BASE_URL}/{short_code}",
             "original_url": url,
             "custom_name": custom_name,
             "campaign_name": campaign_name
-        }})
+        })
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -799,26 +915,22 @@ async def admin_page():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 統計取得
         cursor.execute("""
             SELECT 
                 COUNT(DISTINCT u.id) as total_urls,
                 COUNT(c.id) as total_clicks,
-                COUNT(DISTINCT c.ip_address) as unique_clicks,
-                COUNT(CASE WHEN c.source = 'qr' THEN 1 END) as qr_clicks
+                COUNT(DISTINCT c.ip_address) as unique_clicks
             FROM urls u
             LEFT JOIN clicks c ON u.id = c.url_id
             WHERE u.is_active = 1
         """)
         
         stats = cursor.fetchone()
-        total_urls, total_clicks, unique_clicks, qr_clicks = stats if stats else (0, 0, 0, 0)
+        total_urls, total_clicks, unique_clicks = stats if stats else (0, 0, 0)
         
-        # URL一覧取得
         cursor.execute("""
             SELECT u.short_code, u.original_url, u.created_at, u.custom_name, u.campaign_name,
-                   COUNT(c.id) as click_count,
-                   COUNT(DISTINCT c.ip_address) as unique_count
+                   COUNT(c.id) as click_count
             FROM urls u
             LEFT JOIN clicks c ON u.id = c.url_id
             WHERE u.is_active = 1
@@ -830,12 +942,10 @@ async def admin_page():
         results = cursor.fetchall()
         conn.close()
         
-        # テーブル行生成
         table_rows = ""
         for row in results:
-            short_code, original_url, created_at, custom_name, campaign_name, click_count, unique_count = row
+            short_code, original_url, created_at, custom_name, campaign_name, click_count = row
             
-            # URLを50文字に制限
             display_url = original_url[:50] + "..." if len(original_url) > 50 else original_url
             
             table_rows += f"""
@@ -846,10 +956,8 @@ async def admin_page():
                 <td>{campaign_name or '-'}</td>
                 <td>{created_at}</td>
                 <td>{click_count}</td>
-                <td>{unique_count}</td>
                 <td>
                     <a href="/analytics/{short_code}" target="_blank" class="action-btn analytics-btn">📈 分析</a>
-                    <a href="/{short_code}" target="_blank" class="action-btn qr-btn">🔗 テスト</a>
                 </td>
             </tr>
             """
@@ -858,7 +966,6 @@ async def admin_page():
             total_urls=total_urls,
             total_clicks=total_clicks,
             unique_clicks=unique_clicks,
-            qr_clicks=qr_clicks,
             table_rows=table_rows
         )
         return HTMLResponse(content=html_content)
@@ -886,25 +993,25 @@ async def bulk_process(urls: str = Form(...)):
                 cursor.execute("""
                     INSERT INTO urls (short_code, original_url, created_at)
                     VALUES (?, ?, ?)
-                """, (short_code, clean_url(url), datetime.now().isoformat()))
+                """, (short_code, url, datetime.now().isoformat()))
                 
-                results.append({{
+                results.append({
                     "url": url,
                     "short_url": f"{BASE_URL}/{short_code}",
                     "success": True
-                }})
+                })
             else:
-                results.append({{"url": url, "success": False, "error": "無効なURL"}})
+                results.append({"url": url, "success": False, "error": "無効なURL"})
         
         conn.commit()
         conn.close()
         
-        return JSONResponse({{"results": results}})
+        return JSONResponse({"results": results})
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/analytics/{{short_code}}", response_class=HTMLResponse)
+@app.get("/analytics/{short_code}", response_class=HTMLResponse)
 async def analytics_page(short_code: str):
     try:
         conn = get_db_connection()
@@ -979,10 +1086,10 @@ async def analytics_page(short_code: str):
 
 @app.get("/health")
 async def health_check():
-    return JSONResponse({{"status": "healthy", "timestamp": datetime.now().isoformat()}})
+    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
-# リダイレクト処理（最後に配置）
-@app.get("/{{short_code}}")
+# リダイレクト処理
+@app.get("/{short_code}")
 async def redirect_url(short_code: str, request: Request):
     try:
         conn = get_db_connection()
@@ -1000,12 +1107,11 @@ async def redirect_url(short_code: str, request: Request):
         client_ip = request.client.host
         user_agent = request.headers.get("user-agent", "")
         referrer = request.headers.get("referer", "")
-        source = request.query_params.get("source", "direct")
         
         cursor.execute("""
-            INSERT INTO clicks (url_id, ip_address, user_agent, referrer, source, clicked_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (url_id, client_ip, user_agent, referrer, source, datetime.now().isoformat()))
+            INSERT INTO clicks (url_id, ip_address, user_agent, referrer, clicked_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (url_id, client_ip, user_agent, referrer, datetime.now().isoformat()))
         
         conn.commit()
         conn.close()
@@ -1018,4 +1124,5 @@ async def redirect_url(short_code: str, request: Request):
         raise HTTPException(status_code=500, detail="リダイレクトエラー")
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
