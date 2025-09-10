@@ -1,4 +1,4 @@
-# main.py - 高品質UI/UX統合版
+# main.py - 修正版（列ズレ解消・ボタン動作対応）
 from fastapi import FastAPI, Request, HTTPException, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import os
@@ -413,74 +413,275 @@ ADMIN_HTML = """
 </html>
 """
 
-# ローカル風高品質一括生成HTML（ボタン修正版）
+# 修正版一括生成HTML（列ズレ解消・ボタン動作対応）
 BULK_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
     <title>一括リンク生成システム</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; display: flex; align-items: center; }}
-        h1::before {{ content: '🚀'; margin-right: 10px; }}
-        .instructions {{ background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-        .instructions h3 {{ margin-bottom: 15px; display: flex; align-items: center; }}
-        .instructions h3::before {{ content: '📋'; margin-right: 8px; }}
-        .action-buttons {{ text-align: center; margin: 20px 0; }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5; 
+            color: #333;
+        }}
+        .container {{ 
+            max-width: 1800px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }}
+        h1 {{ 
+            color: #2c3e50; 
+            border-bottom: 4px solid #4CAF50; 
+            padding-bottom: 15px; 
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }}
+        .instructions {{ 
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            padding: 20px; 
+            border-radius: 10px; 
+            margin: 25px 0; 
+            border-left: 5px solid #2196F3;
+        }}
+        .instructions h3 {{ 
+            margin-bottom: 18px; 
+            color: #1976d2;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        .instructions ol {{ 
+            margin-left: 25px; 
+            line-height: 1.8;
+        }}
+        .instructions li {{ 
+            margin-bottom: 12px; 
+            padding-left: 8px;
+        }}
+        .instructions strong {{ 
+            color: #d35400; 
+            background: #fff3e0; 
+            padding: 2px 6px; 
+            border-radius: 4px;
+        }}
+        .action-buttons {{ 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 12px; 
+            margin: 25px 0; 
+            justify-content: center;
+        }}
         .btn {{ 
-            padding: 8px 16px; margin: 3px; border: none; border-radius: 4px; 
-            cursor: pointer; font-size: 13px; font-weight: 500;
+            padding: 12px 20px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 120px;
+            justify-content: center;
+        }}
+        .btn:hover {{ 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }}
+        .btn-add {{ 
+            background: linear-gradient(135deg, #2196F3 0%, #1976d2 100%);
+            color: white; 
+        }}
+        .btn-clear {{ 
+            background: linear-gradient(135deg, #FF9800 0%, #f57c00 100%);
+            color: white; 
+        }}
+        .btn-generate {{ 
+            background: linear-gradient(135deg, #4CAF50 0%, #388e3c 100%);
+            color: white; 
+            font-weight: bold;
+            font-size: 16px;
+            padding: 15px 25px;
+        }}
+        .btn-admin {{ 
+            background: linear-gradient(135deg, #9C27B0 0%, #7b1fa2 100%);
+            color: white; 
+        }}
+        .spreadsheet-container {{ 
+            margin: 25px 0; 
+            overflow-x: auto; 
+            border: 2px solid #e0e0e0; 
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }}
+        .spreadsheet-table {{ 
+            width: 100%; 
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 1400px;
+        }}
+        .spreadsheet-table th {{ 
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white; 
+            text-align: center; 
+            padding: 16px 12px; 
+            border: 1px solid #388e3c;
+            font-weight: 600;
+            font-size: 14px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }}
+        .spreadsheet-table td {{ 
+            border: 1px solid #e0e0e0; 
+            padding: 8px;
+            background: white;
+        }}
+        .spreadsheet-table input {{ 
+            width: 100%; 
+            border: 2px solid transparent; 
+            padding: 10px 8px; 
+            font-size: 14px;
+            outline: none; 
+            background: transparent;
+            border-radius: 4px;
             transition: all 0.2s ease;
         }}
-        .btn:hover {{ transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }}
-        .btn-add {{ background: #2196F3; color: white; }}
-        .btn-clear {{ background: #FF9800; color: white; }}
-        .btn-generate {{ background: #f44336; color: white; font-weight: bold; }}
-        .btn-admin {{ background: #4CAF50; color: white; }}
-        .spreadsheet-container {{ margin: 20px 0; overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }}
-        .spreadsheet-table {{ width: 100%; border-collapse: collapse; min-width: 1400px; }}
-        .spreadsheet-table th {{ 
-            background: #4CAF50; color: white; text-align: center; 
-            padding: 12px 8px; border: 1px solid #45a049; font-weight: 600;
+        .spreadsheet-table input:focus {{ 
+            background: #fff3cd; 
+            border-color: #ffc107;
         }}
-        .spreadsheet-table td {{ border: 1px solid #ddd; padding: 4px; }}
-        .spreadsheet-table input {{ 
-            width: 100%; border: none; padding: 8px 6px; font-size: 13px;
-            outline: none; background: transparent;
+        .row-number {{ 
+            background: #f8f9fa; 
+            text-align: center; 
+            font-weight: bold; 
+            width: 70px;
+            color: #495057;
+            font-size: 14px;
         }}
-        .spreadsheet-table input:focus {{ background: #fff3cd; }}
-        .row-number {{ background: #f8f9fa; text-align: center; font-weight: bold; width: 60px; }}
         .delete-btn {{ 
-            background: #dc3545; color: white; border: none; 
-            padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white; 
+            border: none; 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }}
-        .results-section {{ margin: 30px 0; display: none; }}
+        .delete-btn:hover {{ 
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        }}
+        .results-section {{ 
+            margin: 35px 0; 
+            display: none; 
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }}
         .result-item {{ 
-            background: #d4edda; padding: 15px; margin: 10px 0; 
-            border-radius: 5px; border-left: 4px solid #28a745; 
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            padding: 20px; 
+            margin: 15px 0; 
+            border-radius: 8px; 
+            border-left: 5px solid #28a745;
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
         }}
-        .error-item {{ background: #f8d7da; border-left: 4px solid #dc3545; color: #721c24; }}
+        .error-item {{ 
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border-left: 5px solid #dc3545;
+            color: #721c24;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+        }}
         .copy-btn {{ 
-            background: #fd7e14; color: white; border: none; 
-            padding: 4px 8px; border-radius: 3px; cursor: pointer; margin-left: 8px; 
+            background: linear-gradient(135deg, #fd7e14 0%, #f39c12 100%);
+            color: white; 
+            border: none; 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            margin-left: 12px; 
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }}
-        .loading {{ text-align: center; padding: 20px; }}
+        .copy-btn:hover {{ 
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(253, 126, 20, 0.3);
+        }}
+        .loading {{ 
+            text-align: center; 
+            padding: 30px; 
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px 0;
+        }}
         .spinner {{ 
-            border: 3px solid #f3f3f3; border-top: 3px solid #4CAF50; 
-            border-radius: 50%; width: 30px; height: 30px; 
-            animation: spin 1s linear infinite; margin: 0 auto; 
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #4CAF50; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            animation: spin 1s linear infinite; 
+            margin: 0 auto 20px;
         }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        @keyframes spin {{ 
+            0% {{ transform: rotate(0deg); }} 
+            100% {{ transform: rotate(360deg); }} 
+        }}
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {{
+            .container {{ padding: 15px; }}
+            .action-buttons {{ flex-direction: column; }}
+            .btn {{ width: 100%; }}
+            h1 {{ font-size: 24px; }}
+        }}
+        
+        /* スクロールバーカスタマイズ */
+        .spreadsheet-container::-webkit-scrollbar {{
+            width: 12px;
+            height: 12px;
+        }}
+        .spreadsheet-container::-webkit-scrollbar-track {{
+            background: #f1f1f1;
+            border-radius: 10px;
+        }}
+        .spreadsheet-container::-webkit-scrollbar-thumb {{
+            background: #c1c1c1;
+            border-radius: 10px;
+        }}
+        .spreadsheet-container::-webkit-scrollbar-thumb:hover {{
+            background: #a8a8a8;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>一括リンク生成システム</h1>
+        <h1>🚀 一括リンク生成システム</h1>
         
         <div class="instructions">
-            <h3>使い方</h3>
+            <h3>📋 使い方</h3>
             <ol>
                 <li><strong>B列（必須）</strong>: 短縮したい元のURLを入力（http:// または https:// で始めてください）</li>
                 <li><strong>C列（任意）</strong>: カスタム短縮コードを入力（空白の場合は自動生成）</li>
@@ -504,7 +705,7 @@ BULK_HTML = """
             <table class="spreadsheet-table">
                 <thead>
                     <tr>
-                        <th style="width: 50px;">A<br>行番号</th>
+                        <th style="width: 70px;">A<br>行番号</th>
                         <th style="width: 35%;">B<br>オリジナルURL ※必須</th>
                         <th style="width: 12%;">C<br>カスタム短縮コード<br>(任意)</th>
                         <th style="width: 12%;">D<br>カスタム名<br>(任意)</th>
@@ -578,10 +779,11 @@ BULK_HTML = """
         // 行番号更新
         function updateRowNumbers() {{
             const table = document.getElementById('dataTable');
-            for (let i = 0; i < table.rows.length; i++) {{
-                table.rows[i].cells[0].textContent = i + 1;
+            const rows = table.getElementsByTagName('tr');
+            for (let i = 0; i < rows.length; i++) {{
+                rows[i].cells[0].textContent = i + 1;
             }}
-            rowCount = table.rows.length;
+            rowCount = rows.length;
         }}
         
         // 全削除機能
@@ -607,12 +809,14 @@ BULK_HTML = """
         // 一括生成機能
         async function startGeneration() {{
             const table = document.getElementById('dataTable');
+            const rows = table.getElementsByTagName('tr');
             const urlList = [];
             
             // データ収集
-            for (let i = 0; i < table.rows.length; i++) {{
-                const row = table.rows[i];
-                const url = row.cells[1].querySelector('input').value.trim();
+            for (let i = 0; i < rows.length; i++) {{
+                const row = rows[i];
+                const urlInput = row.cells[1].querySelector('input');
+                const url = urlInput ? urlInput.value.trim() : '';
                 
                 if (url) {{
                     if (!url.startsWith('http://') && !url.startsWith('https://')) {{
@@ -680,9 +884,13 @@ BULK_HTML = """
             }}
             
             let html = `
-                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                    <h3>📊 生成結果サマリー</h3>
-                    <p>成功: <strong>${{successCount}}</strong> | エラー: <strong>${{errorCount}}</strong> | 合計: <strong>${{successCount + errorCount}}</strong></p>
+                <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                    <h3 style="margin: 0 0 15px 0; color: #1976d2;">📊 生成結果サマリー</h3>
+                    <p style="margin: 0; font-size: 16px;">
+                        成功: <strong style="color: #28a745;">${{successCount}}</strong> | 
+                        エラー: <strong style="color: #dc3545;">${{errorCount}}</strong> | 
+                        合計: <strong>${{successCount + errorCount}}</strong>
+                    </p>
                 </div>
             `;
             
@@ -691,15 +899,20 @@ BULK_HTML = """
                     if (item.success) {{
                         html += `
                             <div class="result-item">
-                                <p><strong>${{index + 1}}. 元URL:</strong> ${{item.url}}</p>
-                                <p><strong>短縮URL:</strong> 
-                                    <a href="${{item.short_url}}" target="_blank">${{item.short_url}}</a>
+                                <p style="margin: 0 0 12px 0;"><strong>${{index + 1}}. 元URL:</strong> ${{item.url}}</p>
+                                <p style="margin: 0;">
+                                    <strong>短縮URL:</strong> 
+                                    <a href="${{item.short_url}}" target="_blank" style="color: #007bff; text-decoration: none;">${{item.short_url}}</a>
                                     <button class="copy-btn" onclick="copyText('${{item.short_url}}')">📋 コピー</button>
                                 </p>
                             </div>
                         `;
                     }} else {{
-                        html += `<div class="error-item">❌ ${{item.url}} - ${{item.error}}</div>`;
+                        html += `
+                            <div class="error-item">
+                                <p style="margin: 0;">❌ ${{item.url}} - ${{item.error}}</p>
+                            </div>
+                        `;
                     }}
                 }});
             }}
@@ -781,14 +994,14 @@ async def shorten_form(url: str = Form(...), custom_name: str = Form(""), campai
         conn.commit()
         conn.close()
         
-        return JSONResponse({{
+        return JSONResponse({
             "success": True,
             "short_code": short_code,
             "short_url": f"{BASE_URL}/{short_code}",
             "original_url": url,
             "custom_name": custom_name,
             "campaign_name": campaign_name
-        }})
+        })
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -888,23 +1101,23 @@ async def bulk_process(urls: str = Form(...)):
                     VALUES (?, ?, ?)
                 """, (short_code, clean_url(url), datetime.now().isoformat()))
                 
-                results.append({{
+                results.append({
                     "url": url,
                     "short_url": f"{BASE_URL}/{short_code}",
                     "success": True
-                }})
+                })
             else:
-                results.append({{"url": url, "success": False, "error": "無効なURL"}})
+                results.append({"url": url, "success": False, "error": "無効なURL"})
         
         conn.commit()
         conn.close()
         
-        return JSONResponse({{"results": results}})
+        return JSONResponse({"results": results})
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/analytics/{{short_code}}", response_class=HTMLResponse)
+@app.get("/analytics/{short_code}", response_class=HTMLResponse)
 async def analytics_page(short_code: str):
     try:
         conn = get_db_connection()
@@ -979,10 +1192,10 @@ async def analytics_page(short_code: str):
 
 @app.get("/health")
 async def health_check():
-    return JSONResponse({{"status": "healthy", "timestamp": datetime.now().isoformat()}})
+    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat()}})
 
 # リダイレクト処理（最後に配置）
-@app.get("/{{short_code}}")
+@app.get("/{short_code}")
 async def redirect_url(short_code: str, request: Request):
     try:
         conn = get_db_connection()
