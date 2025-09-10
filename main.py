@@ -291,7 +291,7 @@ INDEX_HTML = """
                     <div style="margin: 15px 0;">
                         <strong>元のURL:</strong> ${{data.original_url}}
                     </div>
-                    ${{data.custom_name ? \`<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>\` : ''}}
+                    ${{data.custom_name ? `<div><strong>カスタム名:</strong> ${{data.custom_name}}</div>` : ''}}
                     ${{data.campaign_name ? \`<div><strong>キャンペーン:</strong> ${{data.campaign_name}}</div>\` : ''}}
                     <div style="margin-top: 20px;">
                         <a href="/analytics/${{data.short_code}}" class="btn btn-success">📈 分析ページ</a>
@@ -1192,7 +1192,7 @@ async def analytics_page(short_code: str):
 
 @app.get("/health")
 async def health_check():
-    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat()}})
+    return JSONResponse({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
 # リダイレクト処理（最後に配置）
 @app.get("/{short_code}")
@@ -1232,3 +1232,4 @@ async def redirect_url(short_code: str, request: Request):
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
