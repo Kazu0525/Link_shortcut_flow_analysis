@@ -1,415 +1,402 @@
-# LinkTrack Pro - URL短縮・分析プラットフォーム
+# LinkTrack Pro Advanced - 完全使い方マニュアル
 
-## 概要
-LinkTrack Proは、マーケティング効果測定のためのURL短縮・分析プラットフォームです。個人、企業のマーケティングキャンペーンでのURL管理を効率化します。
+**サービスURL**: https://link-shortcut-flow-analysis.onrender.com
 
-## 主要機能
+---
 
-### 🔗 URL短縮
-- 長いURLを短く変換
-- カスタム名・キャンペーン名の設定
-- 即座にコピー可能
+## 📋 目次
 
-### 📊 分析・管理
-- リアルタイムクリック数追跡
-- ユニーク訪問者数計測
-- 管理画面での一覧表示
+1. [機能一覧](#機能一覧)
+2. [ディレクトリ構造](#ディレクトリ構造)
+3. [基本的な使い方](#基本的な使い方)
+4. [詳細機能ガイド](#詳細機能ガイド)
+5. [分析・統計機能](#分析統計機能)
+6. [CSVエクスポート](#csvエクスポート)
+7. [QRコード機能](#qrコード機能)
+8. [トラブルシューティング](#トラブルシューティング)
 
-### 📦 一括生成
-- 複数URLの同時短縮
-- スプレッドシート風のUI
-- CSV形式でのデータ管理
+---
 
-## 技術スタック
+## 🚀 機能一覧
 
-- **バックエンド**: FastAPI (Python)
-- **データベース**: SQLite
-- **フロントエンド**: HTML/CSS/JavaScript
-- **デプロイ**: Render.com
+### 基本機能
+- **URL短縮**: 長いURLを短い形式に変換
+- **カスタム名設定**: 管理しやすい名前を付与
+- **キャンペーン管理**: マーケティングキャンペーン別の分類
+- **リダイレクト**: 短縮URLから元URLへの自動転送
 
-## GitHub + Render デプロイ手順
+### 拡張機能
+- **QRコード自動生成**: 各短縮URLのQRコード作成
+- **一括生成**: 複数URLの同時処理（生成数指定可能）
+- **詳細分析**: アクセス統計・ユーザー行動分析
+- **CSVエクスポート**: 5種類の分析データダウンロード
+- **リアルタイム統計**: 管理ダッシュボードでの即座な確認
 
-### 1. GitHubリポジトリ作成
+### 分析機能
+- **基本統計**: 総クリック数、ユニーク訪問者、QR経由アクセス
+- **デバイス分析**: Mobile/Desktop/Tablet別統計
+- **時間帯分析**: 0時〜23時の時間別アクセス傾向
+- **地理的分析**: 国・都市別アクセス分布（簡易版）
+- **参照元分析**: Google/Facebook/Twitter/Direct等の流入元
+- **UTMパラメータ追跡**: マーケティングキャンペーン効果測定
 
-```bash
-# ローカルでGitリポジトリ初期化（任意）
-git init
-git add .
-git commit -m "Initial commit"
+---
 
-# GitHubでリポジトリ作成後
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-git push -u origin main
+## 📁 ディレクトリ構造
+
+### 現在の構成（単一ファイル版）
 ```
-
-### 2. Renderでの設定
-
-#### Renderアカウント作成・ログイン
-1. [Render.com](https://render.com) にアクセス
-2. GitHubアカウントで連携
-
-#### Web Service作成
-1. ダッシュボードで「New +」→「Web Service」
-2. GitHubリポジトリを選択
-3. 以下の設定を入力：
-
-```
-Name: linktrack-pro (任意)
-Environment: Python 3
-Build Command: pip install -r requirements.txt
-Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-#### 環境変数設定
-Renderの「Environment」タブで以下を設定：
-
-```
-RENDER_EXTERNAL_URL = https://YOUR_APP_NAME.onrender.com
-```
-
-### 3. デプロイ完了
-- 自動でビルド・デプロイが開始
-- 完了すると公開URLが発行される
-
-## ローカル開発（任意）
-
-```bash
-# 依存関係インストール
-pip install -r requirements.txt
-
-# 開発サーバー起動
-uvicorn main:app --reload
-
-# ブラウザでアクセス
-# http://localhost:8000
-```
-
-## ファイル構成
-
-```
-.
-├── main.py              # メインアプリケーション
+url-shortener-mvp/
+├── main.py              # 全機能統合アプリケーション
 ├── requirements.txt     # Python依存関係
-├── .gitignore          # Git無視ファイル
+├── .gitignore          # Git除外設定
 ├── README.md           # プロジェクト説明
-└── url_shortener.db    # データベース（自動生成）
+└── url_shortener.db    # SQLiteデータベース（自動生成）
 ```
 
-## API仕様
-
-### 短縮URL生成
+### 理想的な構成（将来の拡張用）
 ```
-POST /api/shorten-form
-Content-Type: application/x-www-form-urlencoded
-
-url=https://example.com&custom_name=商品A&campaign_name=春キャンペーン
+linktrack-pro/
+├── main.py                    # アプリケーションエントリーポイント
+├── config.py                  # 設定管理
+├── database.py               # データベース初期化
+├── models.py                 # データモデル
+├── utils.py                  # ユーティリティ関数
+├── requirements.txt          # 依存パッケージ
+├── runtime.txt              # Pythonバージョン
+├── render.yaml              # デプロイ設定
+└── routes/                  # ルートモジュール
+    ├── __init__.py
+    ├── redirect.py          # リダイレクト処理
+    ├── shorten.py           # URL短縮
+    ├── analytics.py         # 分析機能
+    ├── bulk.py              # 一括生成
+    ├── export.py            # データエクスポート
+    └── admin.py             # 管理ダッシュボード
+└── templates/               # HTMLテンプレート
+    ├── admin.html
+    ├── analytics.html
+    ├── bulk.html
+    └── index.html
 ```
-
-### 一括生成
-```
-POST /api/bulk-process
-Content-Type: application/x-www-form-urlencoded
-
-urls=https://example1.com
-https://example2.com
-```
-
-### リダイレクト
-```
-GET /{short_code}
-→ 302 Redirect to original URL
-```
-
-## データベーススキーマ
-
-### urls テーブル
-- `id`: 主キー
-- `short_code`: 短縮コード（ユニーク）
-- `original_url`: 元URL
-- `custom_name`: カスタム名
-- `campaign_name`: キャンペーン名
-- `created_at`: 作成日時
-- `is_active`: アクティブフラグ
-
-### clicks テーブル
-- `id`: 主キー
-- `url_id`: URL ID（外部キー）
-- `ip_address`: IPアドレス
-- `user_agent`: ユーザーエージェント
-- `referrer`: リファラー
-- `clicked_at`: クリック日時
-
-## 使用方法
-
-### 1. 個別URL短縮
-1. ホームページにアクセス
-2. 「短縮したいURL」に入力
-3. 「🔗 短縮URLを生成」をクリック
-4. 結果をコピーして使用
-
-### 2. 一括生成
-1. 「📦 一括生成」メニューをクリック
-2. スプレッドシート風の画面で複数URL入力
-3. 「🚀 一括生成開始」で処理実行
-4. 結果を一括取得
-
-### 3. 分析・管理
-1. 「📊 管理ダッシュボード」で全体統計確認
-2. 個別URLの「📈 分析」でクリック詳細表示
-
-## トラブルシューティング
-
-### デプロイエラー
-```
-Failed to build: pip install failed
-```
-**対処法**: `requirements.txt`の依存関係を確認
-
-### データベースエラー
-```
-no such table: urls
-```
-**対処法**: アプリケーション初回起動時に自動作成されるので、Renderを再デプロイ
-
-### URL生成エラー
-```
-無効なURLです
-```
-**対処法**: URLが`http://`または`https://`で始まることを確認
-
-## セキュリティ・制限事項
-
-- SQLiteファイルデータベース（小規模利用向け）
-- 短縮コードは6文字ランダム生成
-- IPアドレス記録（匿名化推奨）
-- Render無料プランの制限あり
-
-## ライセンス
-
-MIT License
-
-## 作成者
-
-FastAPI + Render.com MVPソリューション
 
 ---
 
-**注意**: このMVPは開発・テスト用途向けです。商用利用の場合は、セキュリティ強化とスケーラビリティの検討が必要です。
+## 🎯 基本的な使い方
 
----------------
-# 🚀 GitHub + Render デプロイ完全ガイド
+### 1. ホームページでのURL短縮
 
-このガイドに従って、初心者でも確実にURL短縮サービスをデプロイできます。
+**手順**:
+1. https://link-shortcut-flow-analysis.onrender.com にアクセス
+2. 「短縮したいURL」欄に元URLを入力（例: https://example.com）
+3. 【任意】「カスタム名」に管理用の名前を入力（例: 商品Aページ）
+4. 【任意】「キャンペーン名」を入力（例: 春のセール）
+5. 「短縮URLを生成」ボタンをクリック
+6. 生成された短縮URLとQRコードを確認
+7. 「コピー」ボタンで短縮URLをクリップボードにコピー
 
-## ✅ 事前準備
-
-### 必要なアカウント
-1. **GitHubアカウント** - [github.com](https://github.com)で作成
-2. **Renderアカウント** - [render.com](https://render.com)で作成（GitHubと連携）
-
-### 必要なファイル
-以下4つのファイルをGitHubリポジトリに配置：
-- `main.py` （メインアプリケーション）
-- `requirements.txt` （依存関係）
-- `.gitignore` （Git無視設定）
-- `README.md` （説明書）
-
-## 📂 STEP 1: GitHubリポジトリ作成
-
-### 1-1. 新しいリポジトリ作成
-1. [GitHub](https://github.com)にログイン
-2. 右上「+」→「New repository」
-3. 以下の設定：
-   ```
-   Repository name: url-shortener-mvp
-   Description: URL短縮サービスMVP
-   Public にチェック
-   Add a README file にチェックしない
-   ```
-4. 「Create repository」をクリック
-
-### 1-2. ファイルアップロード方法
-
-#### 方法A: Web画面から直接アップロード
-1. 作成したリポジトリページで「uploading an existing file」をクリック
-2. 4つのファイル（main.py, requirements.txt, .gitignore, README.md）をドラッグ&ドロップ
-3. コミットメッセージ: `Initial commit`
-4. 「Commit changes」をクリック
-
-#### 方法B: コマンドライン（上級者向け）
-```bash
-git clone https://github.com/YOUR_USERNAME/url-shortener-mvp.git
-cd url-shortener-mvp
-# ファイルをコピー
-git add .
-git commit -m "Initial commit"
-git push origin main
+**結果例**:
+```
+短縮URL: https://link-shortcut-flow-analysis.onrender.com/Abc123
+QRコード: 自動生成される（PNG形式でダウンロード可能）
 ```
 
-## 🚀 STEP 2: Render設定
+### 2. 管理ダッシュボードの確認
 
-### 2-1. Renderアカウント作成
-1. [render.com](https://render.com)にアクセス
-2. 「Sign up」→「Continue with GitHub」
-3. GitHubアカウントと連携
+**アクセス方法**:
+- URL: https://link-shortcut-flow-analysis.onrender.com/admin
+- ナビゲーション: ホームページ → 「管理ダッシュボード」
 
-### 2-2. Web Service作成
-1. Renderダッシュボードで「New +」ボタン
-2. 「Web Service」を選択
-3. 「Connect a repository」セクションで作成したリポジトリを選択
-4. 「Connect」をクリック
-
-### 2-3. 設定入力
-以下の設定を**正確に**入力：
-
-```
-Name: url-shortener-mvp
-Environment: Python 3
-Branch: main
-Root Directory: （空欄のまま）
-Build Command: pip install -r requirements.txt
-Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-### 2-4. プラン選択
-- **Free** プランを選択（無料）
-- 「Create Web Service」をクリック
-
-## ⚙️ STEP 3: 環境変数設定
-
-### 3-1. 環境変数追加
-1. 作成されたサービスの「Environment」タブをクリック
-2. 「Add Environment Variable」をクリック
-3. 以下を入力：
-   ```
-   Key: RENDER_EXTERNAL_URL
-   Value: https://YOUR_APP_NAME.onrender.com
-   ```
-   ※ YOUR_APP_NAMEは実際のアプリ名に変更
-
-### 3-2. デプロイ開始
-- 設定完了後、自動的にビルドが開始されます
-- 「Events」タブでビルドログを確認できます
-
-## ✅ STEP 4: デプロイ完了確認
-
-### 4-1. ビルド成功確認
-- 「Events」タブで以下が表示されればOK：
-  ```
-  Deploy live for service 'url-shortener-mvp'
-  ```
-
-### 4-2. アプリケーション動作確認
-1. 発行されたURLにアクセス
-2. ホームページが表示されることを確認
-3. 「📦 一括生成」「📊 管理ダッシュボード」のリンク動作確認
-4. 実際にURL短縮機能をテスト
-
-## 🐛 トラブルシューティング
-
-### エラー1: Build failed
-```
-Error: pip install failed
-```
-**原因**: requirements.txtの内容に誤りがある
-**解決法**: 
-1. GitHubで`requirements.txt`の内容を確認
-2. 以下の通りであることを確認：
-   ```
-   fastapi==0.104.1
-   uvicorn[standard]==0.24.0
-   python-multipart==0.0.6
-   ```
-
-### エラー2: Application failed to start
-```
-Error: ModuleNotFoundError: No module named 'main'
-```
-**原因**: main.pyファイルが見つからない
-**解決法**: 
-1. GitHubリポジトリに`main.py`があることを確認
-2. Renderの「Settings」で「Root Directory」が空欄であることを確認
-
-### エラー3: Start command failed
-```
-Error: uvicorn command not found
-```
-**原因**: Start Commandが間違っている
-**解決法**: 
-1. Renderの「Settings」で「Start Command」を確認
-2. 以下の通りに修正：
-   ```
-   uvicorn main:app --host 0.0.0.0 --port $PORT
-   ```
-
-### エラー4: 502 Bad Gateway
-**原因**: アプリケーションが正しく起動していない
-**解決法**: 
-1. 「Events」タブでエラーログを確認
-2. コードに構文エラーがないかチェック
-3. 必要に応じてGitHubのコードを修正してプッシュ
-
-## 🔄 更新・修正方法
-
-### コード修正時
-1. GitHubでファイルを編集
-2. コミット
-3. Renderで自動的に再デプロイが開始されます
-
-### 手動再デプロイ
-1. Renderダッシュボードの「Manual Deploy」→「Deploy latest commit」
-
-## 📋 デプロイ後のチェックリスト
-
-- [ ] ホームページにアクセスできる
-- [ ] URL短縮機能が動作する
-- [ ] 短縮URLでリダイレクトされる
-- [ ] 一括生成ページが表示される
-- [ ] 管理画面でデータが表示される
-- [ ] APIエンドポイント（/docs）にアクセスできる
-
-## 🎯 成功時の確認URL
-
-アプリが正常にデプロイされた場合、以下のURLで動作確認：
-
-```
-https://YOUR_APP_NAME.onrender.com/          # ホームページ
-https://YOUR_APP_NAME.onrender.com/bulk      # 一括生成
-https://YOUR_APP_NAME.onrender.com/admin     # 管理画面
-https://YOUR_APP_NAME.onrender.com/docs      # API文書
-https://YOUR_APP_NAME.onrender.com/health    # ヘルスチェック
-```
-
-## 💡 重要な注意点
-
-### Render無料プランの制限
-- **スリープ機能**: 15分間アクセスがないとアプリがスリープ
-- **初回アクセス**: スリープ後の初回アクセスは30秒程度かかる場合あり
-- **帯域制限**: 月100GBまで
-- **ビルド時間**: 月500分まで
-
-### データベースについて
-- SQLiteファイルはアプリと同じディスクに保存
-- 永続化されますが、定期的なバックアップ推奨
-- 大量データにはPostgreSQLへの移行を検討
-
-## 🆘 サポート情報
-
-### Render公式ドキュメント
-- [Renderヘルプセンター](https://render.com/docs)
-- [Python デプロイガイド](https://render.com/docs/deploy-fastapi)
-
-### よくある質問
-**Q: デプロイ後にアクセスできない**
-A: 数分待ってから再度アクセス。Renderの初回デプロイは時間がかかります。
-
-**Q: データベースが初期化される**
-A: アプリケーション再起動時は正常動作。データ永続化されています。
-
-**Q: カスタムドメインを使いたい**
-A: Render有料プランで可能。無料プランでは `onrender.com` サブドメインのみ。
+**確認できる情報**:
+- **総URL数**: 作成した短縮URL総数
+- **総クリック数**: 全短縮URLの合計クリック数
+- **ユニーク訪問者**: 重複を除いた実際の訪問者数
+- **QR経由アクセス**: QRコードからのアクセス数
+- **モバイルアクセス**: スマートフォンからのアクセス数
+- **本日のクリック**: 当日のアクセス数
 
 ---
 
-**このガイドに従えば、技術初心者でも確実にURL短縮サービスをデプロイできます。**
+## 📦 詳細機能ガイド
+
+### 一括生成機能
+
+**アクセス**: https://link-shortcut-flow-analysis.onrender.com/bulk
+
+**使い方**:
+1. **行の追加**: 「1行追加」「5行追加」ボタンで入力行を増やす
+2. **URL入力**: B列に短縮したいURLを入力（http://またはhttps://必須）
+3. **カスタム名**: C列に管理用の名前を入力（任意）
+4. **キャンペーン名**: D列にキャンペーン名を入力（任意）
+5. **生成数**: E列に同一URLから作成する短縮リンク数を入力（1〜10）
+6. **一括生成**: 「一括生成開始」ボタンで処理実行
+
+**生成数機能の例**:
+```
+入力:
+URL: https://example.com/product
+カスタム名: 商品A
+生成数: 3
+
+結果:
+商品A_1 → https://link-shortcut-flow-analysis.onrender.com/Def456
+商品A_2 → https://link-shortcut-flow-analysis.onrender.com/Ghi789
+商品A_3 → https://link-shortcut-flow-analysis.onrender.com/Jkl012
+```
+
+**活用シーン**:
+- **A/Bテスト**: 同一URLで複数の短縮リンクを作成し、異なる広告で使用
+- **チャネル別計測**: SNS、メール、チラシなど媒体別にリンクを分ける
+- **期間別キャンペーン**: 同一商品を異なる期間で計測
+
+### 操作ボタン
+- **行追加**: 入力フォームを1行または5行追加
+- **全クリア**: 全ての入力内容をリセット
+- **削除**: 各行の削除ボタンで不要な行を削除
+
+---
+
+## 📊 分析・統計機能
+
+### 詳細分析ページ
+
+**アクセス方法**:
+1. 管理ダッシュボード → 「分析」ボタン
+2. 直接URL: `/analytics/{短縮コード}`
+
+**分析項目**:
+
+#### 基本統計
+- **総クリック数**: 短縮URLがクリックされた総回数
+- **ユニーク訪問者**: IPアドレス重複を除いた実際の訪問者数
+- **QR経由アクセス**: QRコードからアクセスした回数
+- **モバイル率**: モバイルデバイスからのアクセス割合
+
+#### デバイス別分析
+```
+デバイス種別    クリック数    割合
+Mobile         45           60%
+Desktop        25           33%
+Tablet         5            7%
+```
+
+#### ブラウザ別分析
+```
+ブラウザ       クリック数    割合
+Chrome         40           53%
+Safari         20           27%
+Firefox        10           13%
+Edge           5            7%
+```
+
+#### 参照元分析
+```
+参照元         クリック数
+Direct         30
+Google         20
+Facebook       15
+Twitter        10
+```
+
+#### 時間帯別分析
+```
+時間帯         クリック数
+9:00-10:00     15
+14:00-15:00    12
+20:00-21:00    8
+```
+
+### 統計の活用方法
+
+**マーケティング戦略**:
+- **最適投稿時間**: 時間帯別データから効果的な投稿時間を特定
+- **デバイス最適化**: モバイル率を見てレスポンシブ対応の優先度決定
+- **チャネル効果測定**: 参照元データから効果的な集客チャネルを把握
+
+**A/Bテスト実施**:
+- 複数の短縮URLで同一コンテンツへの流入を比較
+- クリック率、モバイル率、時間帯などで傾向分析
+
+---
+
+## 📄 CSVエクスポート
+
+**アクセス**: 管理ダッシュボード → 「データエクスポート機能」セクション
+
+### エクスポート種類
+
+#### 1. 基本統計データ
+- **URL**: `/export`
+- **内容**: 短縮コード、元URL、クリック数、ユニーク訪問者等
+- **用途**: 概要把握、月次レポート作成
+
+**CSVサンプル**:
+```csv
+短縮コード,元URL,カスタム名,キャンペーン名,作成日,総クリック数,ユニーク訪問者,QR経由アクセス,モバイルアクセス
+Abc123,https://example.com,商品A,春セール,2025-01-15,45,32,8,27
+Def456,https://example.com/product,商品B,夏セール,2025-01-16,23,18,3,15
+```
+
+#### 2. 詳細分析データ
+- **URL**: `/export/detailed`
+- **内容**: 全クリックの詳細（IP、デバイス、ブラウザ、時刻等）
+- **用途**: 深堀り分析、ユーザー行動詳細調査
+
+#### 3. 時間帯別データ
+- **URL**: `/export/hourly`
+- **内容**: 各短縮URLの時間帯別アクセス統計
+- **用途**: 最適投稿時間の分析
+
+#### 4. デバイス別データ
+- **URL**: `/export/devices`
+- **内容**: デバイス種別、ブラウザ、OS別統計
+- **用途**: 技術的最適化の優先度決定
+
+#### 5. UTMパラメータ
+- **URL**: `/export/utm`
+- **内容**: マーケティングキャンペーンのUTMパラメータ別効果
+- **用途**: 広告ROI測定、キャンペーン効果分析
+
+### CSVデータの活用
+
+**Excelでの分析例**:
+1. CSVファイルをExcelで開く
+2. ピボットテーブルで時間帯別、デバイス別集計
+3. グラフ作成でトレンド可視化
+4. 条件付き書式でパフォーマンス強調
+
+**Googleスプレッドシートでの共有**:
+1. CSVをGoogleスプレッドシートにインポート
+2. チームメンバーと共有
+3. リアルタイムでのデータ更新・分析
+
+---
+
+## 📱 QRコード機能
+
+### QRコード生成方法
+
+#### 自動生成
+- **タイミング**: URL短縮時に自動でQRコード作成
+- **形式**: PNG画像（Base64エンコード）
+- **サイズ**: 300x300ピクセル（標準）
+
+#### QRコード表示・ダウンロード
+
+**手順**:
+1. 管理ダッシュボードで「QR」ボタンをクリック
+2. QRコード専用ページが表示
+3. 「画像をダウンロード」でPNGファイル取得
+
+**QRコード活用例**:
+
+#### 印刷物への活用
+- **チラシ・ポスター**: 店舗情報、キャンペーンページへの誘導
+- **名刺**: 個人サイト、LinkedInプロフィールへのリンク
+- **商品パッケージ**: 商品詳細、レビューページへの誘導
+
+#### イベント活用
+- **展示会**: ブース説明、資料ダウンロードページ
+- **セミナー**: 資料配布、アンケートページ
+- **店舗内**: メニュー、商品詳細、レビュー投稿
+
+#### デジタル活用
+- **メール署名**: 自動でQRコード挿入
+- **SNS投稿**: 画像にQRコードを重ねて投稿
+- **プレゼンテーション**: スライドにQRコード配置
+
+### QRコード経由の分析
+
+**追跡方法**:
+- QRコード経由のアクセスは自動的に「QR」ソースとして記録
+- 管理ダッシュボードで「QR経由アクセス」として集計表示
+- 詳細分析ページでQR専用統計を確認可能
+
+**分析活用**:
+- **オフライン効果測定**: 印刷物からの集客効果を数値化
+- **チャネル別比較**: QRコード vs Webリンク vs SNSの効果比較
+- **時系列分析**: QRコード配布後の時間別アクセス推移
+
+---
+
+## 🛠️ トラブルシューティング
+
+### よくある問題と解決方法
+
+#### URL短縮ができない
+**症状**: 「無効なURLです」エラー表示
+**原因**: URLの形式が正しくない
+**解決法**: 
+- `http://` または `https://` で始まることを確認
+- 正しい例: `https://example.com`
+- 間違い例: `example.com`, `www.example.com`
+
+#### QRコードが表示されない
+**症状**: QRコード画像が空白
+**原因**: QRコードライブラリの問題
+**解決法**: 
+- ページを再読み込み
+- しばらく時間をおいて再試行
+- 管理画面から「QR」ボタンで再生成
+
+#### 一括生成でエラー
+**症状**: 「生成数は1〜10の範囲で入力してください」
+**原因**: E列の生成数が範囲外
+**解決法**: 
+- 生成数を1〜10の数値に修正
+- 空白の場合は「1」を入力
+
+#### 統計が表示されない
+**症状**: 管理画面で統計が「0」表示
+**原因**: まだアクセスがない、またはデータベース初期化中
+**解決法**: 
+- 短縮URLに実際にアクセスしてテスト
+- 数分待ってから「データ更新」ボタンをクリック
+
+#### CSVダウンロードできない
+**症状**: CSVエクスポートボタンを押しても反応なし
+**原因**: ブラウザのポップアップブロック
+**解決法**: 
+- ブラウザのポップアップブロックを解除
+- 右クリック「名前を付けてリンク先を保存」で直接ダウンロード
+
+### パフォーマンス最適化
+
+#### アクセス速度が遅い場合
+**Render無料プランの制限**:
+- 15分間アクセスがないとスリープモード
+- 初回アクセス時は30秒程度待機時間あり
+- 解決策: 有料プランへのアップグレード検討
+
+#### 大量データの処理
+**一括生成の上限**:
+- 一度に50個以上の生成時は確認ダイアログ表示
+- 推奨: 1回あたり20〜30個程度に分割
+
+---
+
+## 📞 サポート情報
+
+### 技術仕様
+- **対応ブラウザ**: Chrome、Firefox、Safari、Edge（最新版）
+- **短縮コード**: 6文字（英数字）
+- **データベース**: SQLite（永続化対応）
+- **QRコード**: PNG形式、300x300px
+- **CSV文字コード**: UTF-8 BOM付き（Excel対応）
+
+### 制限事項
+- **無料プラン制限**: 月100GB転送量、15分スリープ
+- **短縮URL有効期限**: なし（永続的）
+- **同時アクセス**: 制限なし
+- **データ保持期間**: 無制限
+
+### 推奨運用
+- **定期バックアップ**: CSVエクスポートでデータ保全
+- **アクセス監視**: 管理画面での定期的な統計確認
+- **QRコード保存**: 印刷物使用前にローカル保存推奨
+
+---
+
+**最終更新**: 2025年1月  
+**バージョン**: 2.0.0 Advanced  
+**サポート**: GitHub Issues、Render.com サポート
